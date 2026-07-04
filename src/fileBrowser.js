@@ -107,9 +107,9 @@ export class FileBrowser {
     this.container.innerHTML = `
       <div class="file-browser flex flex-col h-full min-h-0">
         <div class="flex items-center justify-between mb-2 shrink-0">
-          <label id="browser-title" class="text-sm font-semibold text-white">Hastalar</label>
+          <label id="browser-title" class="text-sm font-semibold mp-text-title">Hastalar</label>
           <button id="btn-refresh-files" type="button"
-            class="text-[10px] text-gray-400 hover:text-white px-2 py-0.5 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors"
+            class="mp-btn-ghost text-[10px] px-2 py-0.5 rounded"
             title="Listeyi yenile">↻ Yenile</button>
         </div>
 
@@ -122,16 +122,16 @@ export class FileBrowser {
 
         <div id="browser-search-row" class="relative mb-2">
           <input id="file-search" type="search" placeholder="Hasta ara..."
-            class="w-full pl-8 pr-3 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-medical-accent transition-colors" />
-          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">🔍</span>
+            class="mp-input w-full pl-8 pr-3 py-2 rounded-lg text-xs" />
+          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 mp-text-faint text-xs">🔍</span>
         </div>
 
         <div id="patient-filters" class="flex flex-wrap gap-1 mb-1.5"></div>
         <div id="date-filters" class="flex flex-wrap gap-1 mb-2"></div>
 
-        <div id="file-list-meta" class="text-[10px] text-gray-500 mb-1"></div>
+        <div id="file-list-meta" class="text-[10px] mp-text-faint mb-1"></div>
 
-        <div id="file-list" class="flex-1 min-h-0 overflow-y-auto rounded-lg border border-anthracite-700 bg-anthracite-950/50">
+        <div id="file-list" class="flex-1 min-h-0 overflow-y-auto rounded-lg">
           <div class="p-4 text-center text-xs text-gray-500">Klasör seçilmedi</div>
         </div>
       </div>
@@ -155,8 +155,8 @@ export class FileBrowser {
       this.patientFiltersEl.innerHTML = SET_FILTERS.map(
         (f) => `
         <button type="button" data-set-filter="${f.id}"
-          class="filter-chip px-2 py-0.5 rounded text-[10px] font-medium border transition-colors
-          ${f.id === this.setFilter ? "bg-medical-accent/20 text-medical-accent border-medical-accent/40" : "bg-anthracite-800 text-gray-400 border-anthracite-600 hover:border-anthracite-500"}">
+          class="filter-chip px-2 py-0.5 rounded text-[10px] font-medium transition-colors
+          ${f.id === this.setFilter ? "filter-chip-active" : ""}">
           ${f.label}
         </button>`
       ).join("");
@@ -168,8 +168,8 @@ export class FileBrowser {
     this.dateFiltersEl.innerHTML = DATE_FILTERS.map(
       (f) => `
       <button type="button" data-date-filter="${f.id}"
-        class="filter-chip date-chip px-2 py-0.5 rounded text-[10px] font-medium border transition-colors
-        ${f.id === this.dateFilter ? "bg-medical-accent/20 text-medical-accent border-medical-accent/40" : "bg-anthracite-800 text-gray-400 border-anthracite-600 hover:border-anthracite-500"}">
+        class="filter-chip date-chip px-2 py-0.5 rounded text-[10px] font-medium transition-colors
+        ${f.id === this.dateFilter ? "filter-chip-active" : ""}">
         ${f.label}
       </button>`
     ).join("");
@@ -313,7 +313,7 @@ export class FileBrowser {
         : `${filtered.length} / ${this.patients.length} hasta`;
 
     if (filtered.length === 0) {
-      this.fileListEl.innerHTML = `<div class="p-4 text-center text-xs text-gray-500">Eşleşen hasta yok</div>`;
+      this.fileListEl.innerHTML = `<div class="p-4 text-center text-xs mp-text-faint">Eşleşen hasta yok</div>`;
       return;
     }
 
@@ -324,22 +324,22 @@ export class FileBrowser {
         const isNew = newKeys.has(patient.key);
         return `
         <button type="button" data-patient-key="${patient.key}"
-          class="file-row w-full text-left px-3 py-3 border-b border-anthracite-800 hover:bg-anthracite-800/80 transition-colors
+          class="file-row w-full text-left px-3 py-3
           ${isNew ? "patient-new" : ""}
-          ${isActive && !isNew ? "bg-medical-accent/10 border-l-2 border-l-medical-accent" : ""}">
+          ${isActive && !isNew ? "file-row-active" : ""}">
           <div class="flex items-center justify-between gap-2">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-100 truncate">${patient.patientName}</span>
+                <span class="text-sm font-medium mp-text-title truncate">${patient.patientName}</span>
                 ${isNew ? '<span class="new-badge shrink-0">Yeni</span>' : ""}
               </div>
               <div class="flex items-center gap-1.5 mt-1.5">
                 <span class="flex gap-1">${scanDots(patient)}</span>
-                <span class="text-[10px] text-gray-500">${count}/3 tarama</span>
+                <span class="text-[10px] mp-text-faint">${count}/3 tarama</span>
               </div>
             </div>
             <div class="text-right shrink-0">
-              <div class="text-[10px] text-gray-500">${formatShortDate(patient.latestModified)}</div>
+              <div class="text-[10px] mp-text-faint">${formatShortDate(patient.latestModified)}</div>
               <div class="text-[10px] text-medical-accent mt-0.5">→</div>
             </div>
           </div>
@@ -375,10 +375,10 @@ export class FileBrowser {
 
       if (!file) {
         return `
-        <div class="px-2.5 py-2 border-b border-anthracite-800 opacity-50">
+        <div class="px-2.5 py-2 border-b opacity-50" style="border-color: rgb(var(--mp-border))">
           <div class="flex items-center justify-between">
             <span class="text-xs px-1.5 py-0.5 rounded font-medium ${typeBadgeClass(type)}">${label}</span>
-            <span class="text-[10px] text-gray-500">Dosya yok</span>
+            <span class="text-[10px] mp-text-faint">Dosya yok</span>
           </div>
         </div>`;
       }
@@ -398,17 +398,17 @@ export class FileBrowser {
 
       return `
       <button type="button" data-scan-type="${type}"
-        class="file-row w-full text-left px-2.5 py-2 border-b border-anthracite-800 hover:bg-anthracite-800/80 transition-colors
-        ${isNewFile ? "scan-row-new" : inSession ? (visible ? "bg-medical-accent/10" : "opacity-60") : ""}">
+        class="file-row w-full text-left px-2.5 py-2
+        ${isNewFile ? "scan-row-new" : inSession ? (visible ? "file-row-active" : "opacity-60") : ""}">
         <div class="flex items-center justify-between gap-2 mb-1">
           <span class="text-xs px-1.5 py-0.5 rounded font-medium ${typeBadgeClass(type)}">${label}</span>
           <span class="flex items-center gap-1.5">
             ${isNewFile ? '<span class="new-badge">Yeni</span>' : ""}
-            <span class="text-[10px] ${visible ? "text-medical-accent" : "text-gray-500"}">${visLabel}</span>
+            <span class="text-[10px] ${visible ? "text-medical-accent" : "mp-text-faint"}">${visLabel}</span>
           </span>
         </div>
-        <div class="text-[10px] text-gray-300 truncate" title="${file.filename}">${file.filename}</div>
-        <div class="flex justify-between mt-1 text-[10px] text-gray-500">
+        <div class="text-[10px] mp-text-muted truncate" title="${file.filename}">${file.filename}</div>
+        <div class="flex justify-between mt-1 text-[10px] mp-text-faint">
           <span>${formatFileSize(file.size_bytes)}</span>
           <span>${formatDate(file.modified_at)}</span>
         </div>
@@ -419,12 +419,12 @@ export class FileBrowser {
       ? `<div class="px-2.5 py-2 bg-medical-green/10 border-b border-medical-green/20 text-[10px] text-medical-green">🟢 Bu hastada yeni ölçü var</div>`
       : "";
 
-    this.fileListEl.innerHTML = header + (scanRows || `<div class="p-4 text-center text-xs text-gray-500">Eşleşen tarama yok</div>`);
+    this.fileListEl.innerHTML = header + (scanRows || `<div class="p-4 text-center text-xs mp-text-faint">Eşleşen tarama yok</div>`);
   }
 
   render() {
     if (!this.watchFolder) {
-      this.fileListEl.innerHTML = `<div class="p-4 text-center text-xs text-gray-500">Ayarlardan izleme klasörü seçin</div>`;
+      this.fileListEl.innerHTML = `<div class="p-4 text-center text-xs mp-text-faint">Ayarlardan izleme klasörü seçin</div>`;
       this.metaEl.textContent = "";
       return;
     }

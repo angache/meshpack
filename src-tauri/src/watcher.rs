@@ -5,8 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
-const SCAN_EXTENSIONS: &[&str] = &["stl", "ply", "dcm"];
-
 #[derive(Clone, serde::Serialize)]
 pub struct ScanDetectedPayload {
     pub path: String,
@@ -19,7 +17,12 @@ pub struct FolderWatcher {
 }
 
 impl FolderWatcher {
-    pub fn start(app: AppHandle, folder: String) -> Result<Self, String> {
+    pub fn start(
+        app: AppHandle,
+        folder: String,
+        extensions: Vec<String>,
+        focus_on_new_scan: bool,
+    ) -> Result<Self, String> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let stop_clone = stop_flag.clone();
         let app_clone = app.clone();
@@ -27,7 +30,7 @@ impl FolderWatcher {
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
             rt.block_on(async {
-                run_watcher(app_clone, folder, stop_clone).await;
+                run_watcher(app_clone, folder, extensions, focus_on_new_scan, stop_clone).await;
             });
         });
 
@@ -39,7 +42,13 @@ impl FolderWatcher {
     }
 }
 
-async fn run_watcher(app: AppHandle, folder: String, stop: Arc<AtomicBool>) {
+async fn run_watcher(
+    app: AppHandle,
+    folder: String,
+    extensions: Vec<String>,
+    focus_on_new_scan: bool,
+    stop: Arc<AtomicBool>,
+) {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let mut debouncer = match new_debouncer(Duration::from_millis(500), tx) {
@@ -68,7 +77,7 @@ async fn run_watcher(app: AppHandle, folder: String, stop: Arc<AtomicBool>) {
                         continue;
                     }
                     let path = &event.path;
-                    if !is_scan_file(path) {
+                    if !is_scan_file(path, &extensions) {
                         continue;
                     }
                     if !path.is_file() {
@@ -92,10 +101,12 @@ async fn run_watcher(app: AppHandle, folder: String, stop: Arc<AtomicBool>) {
 
                     let _ = app.emit("scan-detected", &payload);
 
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.unminimize();
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                    if focus_on_new_scan {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
                     }
                 }
             }
@@ -108,9 +119,15 @@ async fn run_watcher(app: AppHandle, folder: String, stop: Arc<AtomicBool>) {
     log::info!("Klasör izleme durduruldu");
 }
 
-fn is_scan_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| SCAN_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-        .unwrap_or(false)
+fn is_scan_file(path: &Path, extensions: &[String]) -> bool {
+    let ext = match path.extension().and_then(|e| e.to_str()) {
+        Some(e) => e.to_lowercase(),
+        None => return false,
+    };
+    if extensions.is_empty() {
+        return ["stl", "ply", "dcm"].contains(&ext.as_str());
+    }
+    extensions
+        .iter()
+        .any(|e| e.trim().trim_start_matches('.').to_lowercase() == ext)
 }

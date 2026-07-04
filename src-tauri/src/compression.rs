@@ -42,15 +42,23 @@ fn add_file_to_zip(
 pub fn compress_scans(
     file_paths: &[String],
     patient_name: &str,
+    zip_name_template: &str,
     alignment: Option<&Value>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if file_paths.is_empty() {
         return Err("Sıkıştırılacak dosya yok".into());
     }
 
-    let date = Local::now().format("%Y-%m-%d").to_string();
+    let now = Local::now();
+    let date = now.format("%Y-%m-%d").to_string();
+    let time = now.format("%H%M").to_string();
     let name = safe_name(patient_name);
-    let zip_path = std::env::temp_dir().join(format!("{name}_{date}.zip"));
+    let zip_stem = zip_name_template
+        .replace("{patient}", &name)
+        .replace("{date}", &date)
+        .replace("{time}", &time);
+    let zip_stem = safe_name(&zip_stem);
+    let zip_path = std::env::temp_dir().join(format!("{zip_stem}.zip"));
 
     let zip_file = File::create(&zip_path)?;
     let mut zip = ZipWriter::new(zip_file);

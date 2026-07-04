@@ -115,13 +115,14 @@ pub async fn upload_files(
     zip_path: &Path,
     patient_name: &str,
     notes: &str,
+    drive_folder: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let client = Client::new();
 
     let notes_path = compression::create_notes_file(notes, patient_name)?;
 
-    let zip_link = resumable_upload(&client, token, zip_path).await?;
-    let _notes_link = resumable_upload(&client, token, &notes_path).await?;
+    let zip_link = resumable_upload(&client, token, zip_path, drive_folder).await?;
+    let _notes_link = resumable_upload(&client, token, &notes_path, drive_folder).await?;
 
     let _ = std::fs::remove_file(&notes_path);
 
@@ -132,11 +133,18 @@ async fn resumable_upload(
     client: &Client,
     token: &str,
     file_path: &Path,
+    drive_folder: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let filename = file_path
+    let raw_name = file_path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "file.zip".to_string());
+
+    let filename = if drive_folder.trim().is_empty() {
+        raw_name
+    } else {
+        format!("{}_{}", drive_folder.trim(), raw_name)
+    };
 
     let file_size = std::fs::metadata(file_path)?.len();
 

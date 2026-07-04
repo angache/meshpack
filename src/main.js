@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { MeshViewer } from "./viewer.js";
 import { ScanSession } from "./scanSession.js";
@@ -14,6 +13,17 @@ import {
   SCAN_LABELS,
 } from "./utils.js";
 import { identityTransformSet, matrixToArray } from "./alignment.js";
+import {
+  applySettings,
+  getDefaultVisibility,
+  getSettings,
+  hexToNumber,
+  onSettingsChange,
+  settingsFromConfig,
+  settingsToPayload,
+} from "./settings.js";
+import { initSettingsUI, loadSettingsIntoForm, updateDriveStatus } from "./settingsUI.js";
+import { t } from "./i18n.js";
 
 const statusBadge = document.getElementById("status-badge");
 const statusText = document.getElementById("status-text");
@@ -25,8 +35,6 @@ const btnUpload = document.getElementById("btn-upload");
 const btnAlign = document.getElementById("btn-align");
 const uploadStatus = document.getElementById("upload-status");
 const settingsModal = document.getElementById("settings-modal");
-const watchFolderInput = document.getElementById("watch-folder");
-const driveStatus = document.getElementById("drive-status");
 
 const SLOT_IDS = { upper: "slot-upper", lower: "slot-lower", bite: "slot-bite" };
 const OVERLAY_SLOT_IDS = { upper: "overlay-slot-upper", lower: "overlay-slot-lower", bite: "overlay-slot-bite" };
@@ -42,7 +50,18 @@ let viewer = null;
 let session = new ScanSession();
 let fileBrowser = null;
 let watchFolder = null;
-let visibility = { upper: true, lower: true, bite: false };
+let visibility = getDefaultVisibility();
+
+function applyViewerSettings() {
+  const s = getSettings();
+  viewer?.applyVisualSettings({
+    color_upper: hexToNumber(s.color_upper),
+    color_lower: hexToNumber(s.color_lower),
+    color_bite: hexToNumber(s.color_bite),
+    camera_preset: s.camera_preset,
+    lower_jaw_offset_mm: s.lower_jaw_offset_mm,
+  });
+}
 
 /** Yeni ölçü takibi — gönderimden sonra temizlenir */
 const newPatientKeys = new Set();
@@ -168,14 +187,14 @@ function setStatus(mode, text) {
   } else if (mode === "watching") {
     statusBadge.classList.remove("active");
     statusBadge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-anthracite-700 text-gray-300";
+      "status-badge-idle inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium";
   } else if (mode === "aligned") {
     statusBadge.classList.add("active");
     statusText.textContent = text;
   } else {
     statusBadge.classList.remove("active");
     statusBadge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-anthracite-700 text-gray-400";
+      "status-badge-idle inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium";
   }
 }
 
@@ -197,19 +216,28 @@ function acceptScannerAlignment() {
   if (!viewer.hasMesh("upper") || !viewer.hasMesh("lower") || !viewer.hasMesh("bite")) return;
   viewer.aligned = true;
   markSessionAligned(identityTransformSet(), { fromScanner: true });
+  maybeAutoUpload();
+}
+
+async function maybeAutoUpload() {
+  const s = getSettings();
+  if (!s.auto_upload || !session.isComplete() || !session.aligned) return;
+  if (!patientNameInput.value.trim()) return;
+  if (btnUpload.disabled) return;
+  await performUpload();
 }
 
 function resetAlignButton() {
   btnAlign.disabled = true;
   btnAlign.textContent = "3 tarama bekleniyor";
   btnAlign.className =
-    "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+    "mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed";
 }
 
 function clearPatientData() {
   session.reset();
   viewer.clearAll();
-  visibility = { upper: true, lower: true, bite: false };
+  visibility = getDefaultVisibility();
   patientNameInput.value = "";
   labNotesInput.value = "";
   resetAlignButton();
@@ -260,14 +288,14 @@ function updateScanSlots() {
   if (!complete) {
     btnAlign.textContent = "3 tarama bekleniyor";
     btnAlign.className =
-      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+      "mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed";
   } else if (session.aligned) {
     btnAlign.className =
-      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium done border transition-colors";
+      "mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium done border disabled:opacity-40 disabled:cursor-not-allowed";
   } else {
     btnAlign.textContent = "✅ Hazır";
     btnAlign.className =
-      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium ready border transition-colors";
+      "mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium ready border";
   }
 
   btnUpload.disabled = session.getCompletedCount() === 0;
@@ -331,7 +359,7 @@ async function selectPatient(patient) {
   session.lastActivity = Date.now();
   patientNameInput.value = patient.patientName;
 
-  visibility = { upper: true, lower: true, bite: false };
+  visibility = getDefaultVisibility();
   resetAlignButton();
 
   let loaded = 0;
@@ -398,7 +426,7 @@ async function addScanFromWatcher({ path, filename, size_bytes }) {
     session.patientKey = key;
     session.patientName = name;
     patientNameInput.value = name;
-    visibility = { upper: true, lower: true, bite: false };
+    visibility = getDefaultVisibility();
   }
 
   if (type === "unknown") {
@@ -439,11 +467,12 @@ async function onScanDetected(event) {
 
 async function setupWatchFolder(folder) {
   watchFolder = folder;
-  watchFolderInput.value = folder;
   fileBrowser.setWatchFolder(folder);
-  await invoke("start_watching", { folder });
-  await fileBrowser.refresh();
-  setStatus("watching", "👁 Klasör İzleniyor");
+  if (folder) {
+    await invoke("start_watching", { folder });
+    await fileBrowser.refresh();
+    setStatus("watching", `👁 ${t("watching")}`);
+  }
 }
 
 // Slot tıklama → görünürlük
@@ -458,7 +487,7 @@ btnAlign.addEventListener("click", () => {
   acceptScannerAlignment();
 });
 
-document.getElementById("btn-icp-align")?.addEventListener("click", async () => {
+async function runIcpAlign() {
   if (!session.isComplete()) {
     alert("ICP hizalama için üst, alt ve kapanış taraması gerekli.");
     return;
@@ -471,6 +500,7 @@ document.getElementById("btn-icp-align")?.addEventListener("click", async () => 
 
   const btn = document.getElementById("btn-icp-align");
   btn.disabled = true;
+  const prevText = btn.textContent;
   btn.textContent = "⏳ ICP çalışıyor...";
 
   try {
@@ -491,9 +521,9 @@ document.getElementById("btn-icp-align")?.addEventListener("click", async () => 
     alert(`ICP hizalama başarısız: ${err.message || err}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = "ICP ile yeniden hizala (deneysel)";
+    btn.textContent = prevText;
   }
-});
+}
 
 document.querySelectorAll(".template-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -502,10 +532,6 @@ document.querySelectorAll(".template-btn").forEach((btn) => {
     labNotesInput.value = current ? `${current}, ${text}` : text;
     labNotesInput.focus();
   });
-});
-
-document.getElementById("btn-settings").addEventListener("click", () => {
-  settingsModal.classList.remove("hidden");
 });
 
 const appWindow = getCurrentWindow();
@@ -526,38 +552,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-document.getElementById("btn-settings-close").addEventListener("click", () => {
-  settingsModal.classList.add("hidden");
-});
-
-document.getElementById("btn-pick-folder").addEventListener("click", async () => {
-  const selected = await open({ directory: true, multiple: false, title: "İzleme Klasörü Seç" });
-  if (selected) watchFolderInput.value = selected;
-});
-
-document.getElementById("btn-settings-save").addEventListener("click", async () => {
-  const folder = watchFolderInput.value;
-  if (!folder) return;
-  try {
-    await setupWatchFolder(folder);
-    settingsModal.classList.add("hidden");
-  } catch (err) {
-    alert(`İzleme başlatılamadı: ${err}`);
-  }
-});
-
-document.getElementById("btn-drive-auth").addEventListener("click", async () => {
-  try {
-    const result = await invoke("drive_authenticate");
-    driveStatus.textContent = result ? "✅ Bağlı" : "Bağlantı başarısız";
-    driveStatus.className = "text-xs text-medical-green mt-1.5";
-  } catch (err) {
-    driveStatus.textContent = `Hata: ${err}`;
-    driveStatus.className = "text-xs text-red-400 mt-1.5";
-  }
-});
-
-btnUpload.addEventListener("click", async () => {
+async function performUpload() {
   const scans = session.getAllScans();
   if (scans.length === 0) return;
 
@@ -601,33 +596,69 @@ btnUpload.addEventListener("click", async () => {
     if (uploadedKey) clearNewForPatient(uploadedKey);
 
     clearPatientData();
-    fileBrowser?.render();
+    await fileBrowser?.refresh();
   } catch (err) {
     uploadStatus.textContent = `❌ Hata: ${err}`;
     uploadStatus.className = "text-xs text-center text-red-400 mt-2";
     btnUpload.disabled = false;
-    btnUpload.textContent = "🚀 Sıkıştır ve Drive'a Yükle";
+    btnUpload.textContent = `🚀 ${t("upload_btn")}`;
   }
+}
+
+btnUpload.addEventListener("click", () => performUpload());
+
+async function saveSettingsToBackend(payload) {
+  const saved = await invoke("save_settings", { settings: payload });
+  const merged = settingsFromConfig(saved);
+  loadSettingsIntoForm(merged);
+  applyViewerSettings();
+  if (merged.watch_folder) {
+    await setupWatchFolder(merged.watch_folder);
+  }
+  if (merged.start_fullscreen) {
+    await appWindow.setFullscreen(true);
+  }
+}
+
+initSettingsUI({
+  onSave: saveSettingsToBackend,
+  onDriveAuth: async () => {
+    try {
+      const result = await invoke("drive_authenticate");
+      updateDriveStatus(!!result);
+    } catch (err) {
+      updateDriveStatus(false, `Hata: ${err}`);
+    }
+  },
+  onIcpAlign: runIcpAlign,
+});
+
+onSettingsChange(() => {
+  applyViewerSettings();
+  applySettings();
 });
 
 async function init() {
   initViewer();
   initFileBrowser();
+  applyViewerSettings();
   updateScanSlots();
 
   await listen("scan-detected", onScanDetected);
 
   try {
     const config = await invoke("get_config");
-    if (config.watch_folder) {
-      await setupWatchFolder(config.watch_folder);
+    const merged = settingsFromConfig(config);
+    loadSettingsIntoForm(merged);
+    updateDriveStatus(merged.drive_connected);
+    if (merged.watch_folder) {
+      await setupWatchFolder(merged.watch_folder);
     }
-    if (config.drive_connected) {
-      driveStatus.textContent = "✅ Bağlı";
-      driveStatus.className = "text-xs text-medical-green mt-1.5";
+    if (merged.start_fullscreen) {
+      await appWindow.setFullscreen(true);
     }
   } catch {
-    // İlk açılış
+    applySettings();
   }
 }
 

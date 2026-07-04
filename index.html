@@ -1,29 +1,29 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-theme="dark" data-font-size="normal" data-font-family="system" data-density="comfortable">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MeshPack — Diş Tarama Yöneticisi</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
-  <body class="bg-anthracite-950 text-gray-100 overflow-hidden select-none h-screen w-screen">
+  <body class="overflow-hidden select-none h-screen w-screen">
     <div id="app" class="w-full h-full flex flex-col">
       <!-- Üst bar -->
-      <header class="flex items-center justify-between px-4 py-2 bg-anthracite-900 border-b border-anthracite-600 shrink-0">
+      <header class="mp-header flex items-center justify-between px-4 py-2 shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-medical-accent/20 flex items-center justify-center text-lg">🦷</div>
-          <span class="font-semibold text-sm tracking-wide">MeshPack</span>
+          <span class="font-semibold text-sm tracking-wide mp-text-title">MeshPack</span>
           <span
             id="status-badge"
-            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-anthracite-700 text-gray-400"
+            class="status-badge-idle inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium"
           >
-            <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            <span id="status-dot" class="w-1.5 h-1.5 rounded-full"></span>
             <span id="status-text">İzleme Bekleniyor</span>
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button id="btn-maximize" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Tam ekran (F11)">⛶</button>
-          <button id="btn-settings" class="text-xs text-gray-400 hover:text-white px-3 py-1 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Ayarlar">⚙️ Ayarlar</button>
+          <button id="btn-maximize" class="mp-btn-ghost text-xs px-2 py-1 rounded" title="Tam ekran (F11)">⛶</button>
+          <button id="btn-settings" class="mp-btn-ghost text-xs px-3 py-1 rounded" title="Ayarlar">⚙️ Ayarlar</button>
         </div>
       </header>
 
@@ -38,86 +38,86 @@
         </button>
       </div>
 
-      <main class="flex flex-1 min-h-0">
+      <main id="main-layout" class="flex flex-1 min-h-0">
         <!-- SOL: Hasta listesi + form (ana alan) -->
-        <section class="flex-1 flex flex-col min-w-0 bg-anthracite-900">
+        <section class="mp-panel flex-1 flex flex-col min-w-0">
           <div id="file-browser-root" class="flex-1 min-h-0 flex flex-col px-4 pt-3"></div>
 
-          <div class="shrink-0 border-t border-anthracite-600 px-4 py-3 space-y-3 bg-anthracite-900/95">
+          <div class="mp-footer-bar shrink-0 px-4 py-3 space-y-3">
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="patient-name" class="block text-[10px] font-medium text-gray-400 mb-1">Hasta Adı</label>
+                <label for="patient-name" class="mp-label block text-[10px] font-medium mb-1">Hasta Adı</label>
                 <input id="patient-name" type="text" placeholder="Otomatik doldurulur"
-                  class="w-full px-2.5 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-medical-accent transition-colors" />
+                  class="mp-input w-full px-2.5 py-2 rounded-lg text-xs" />
               </div>
               <div>
-                <label for="lab-notes" class="block text-[10px] font-medium text-gray-400 mb-1">Laboratuvar Notu</label>
+                <label for="lab-notes" class="mp-label block text-[10px] font-medium mb-1">Laboratuvar Notu</label>
                 <input id="lab-notes" type="text" placeholder="Kısa not..."
-                  class="w-full px-2.5 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-medical-accent transition-colors" />
+                  class="mp-input w-full px-2.5 py-2 rounded-lg text-xs" />
               </div>
             </div>
 
             <div class="flex flex-wrap gap-1.5">
-              <button data-template="Zirkonyum Kron" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ Zirkonyum</button>
-              <button data-template="E-Max İnley" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ E-Max</button>
-              <button data-template="A1 Rengi" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ A1</button>
-              <button data-template="Kapanış Kontrol" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ Kapanış</button>
+              <button data-template="Zirkonyum Kron" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ Zirkonyum</button>
+              <button data-template="E-Max İnley" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ E-Max</button>
+              <button data-template="A1 Rengi" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ A1</button>
+              <button data-template="Kapanış Kontrol" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ Kapanış</button>
             </div>
 
             <button id="btn-upload" disabled
-              class="w-full py-2.5 rounded-xl text-xs font-semibold bg-medical-green/20 text-medical-green border border-medical-green/40 hover:bg-medical-green/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+              class="mp-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
               🚀 Sıkıştır ve Drive'a Yükle
             </button>
-            <p id="upload-status" class="text-[10px] text-center text-gray-500 hidden"></p>
+            <p id="upload-status" class="text-[10px] text-center mp-text-faint hidden"></p>
           </div>
         </section>
 
         <!-- SAĞ: Kompakt önizleme -->
-        <aside id="preview-panel" class="preview-panel w-[36rem] shrink-0 flex flex-col border-l border-anthracite-600 bg-anthracite-900">
-          <div class="px-3 py-2 flex items-center justify-between border-b border-anthracite-700 shrink-0">
-            <span class="text-[10px] font-medium text-gray-400">Önizleme <span class="text-gray-600">· çift tıkla</span></span>
-            <button id="btn-expand-preview" type="button" class="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Büyüt">⛶</button>
+        <aside id="preview-panel" class="preview-panel mp-panel mp-panel-side w-[36rem] shrink-0 flex flex-col">
+          <div class="px-3 py-2 flex items-center justify-between mp-border-b shrink-0">
+            <span class="text-[10px] font-medium mp-text-muted">Önizleme <span class="mp-text-faint">· çift tıkla</span></span>
+            <button id="btn-expand-preview" type="button" class="mp-btn-ghost text-[10px] px-1.5 py-0.5 rounded" title="Büyüt">⛶</button>
           </div>
 
           <div class="px-2 py-2 flex gap-1 shrink-0">
             <button type="button" id="slot-upper" data-scan-type="upper"
-              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed text-center cursor-pointer transition-colors disabled:cursor-default"
               title="Üst çene">
-              <div class="text-[9px] text-gray-500">Üst</div>
-              <div class="slot-status text-[10px] text-gray-600">—</div>
+              <div class="text-[9px] mp-text-faint">Üst</div>
+              <div class="slot-status text-[10px] mp-text-faint">—</div>
             </button>
             <button type="button" id="slot-lower" data-scan-type="lower"
-              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed text-center cursor-pointer transition-colors disabled:cursor-default"
               title="Alt çene">
-              <div class="text-[9px] text-gray-500">Alt</div>
-              <div class="slot-status text-[10px] text-gray-600">—</div>
+              <div class="text-[9px] mp-text-faint">Alt</div>
+              <div class="slot-status text-[10px] mp-text-faint">—</div>
             </button>
             <button type="button" id="slot-bite" data-scan-type="bite"
-              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed text-center cursor-pointer transition-colors disabled:cursor-default"
               title="Kapanış">
-              <div class="text-[9px] text-gray-500">Kap.</div>
-              <div class="slot-status text-[10px] text-gray-600">—</div>
+              <div class="text-[9px] mp-text-faint">Kap.</div>
+              <div class="slot-status text-[10px] mp-text-faint">—</div>
             </button>
           </div>
 
           <div id="viewer-slot" class="mx-2 mb-2 shrink-0">
-            <div id="viewer-container" class="viewer-compact relative rounded-lg overflow-hidden bg-anthracite-950 border border-anthracite-700">
+            <div id="viewer-container" class="viewer-compact relative rounded-lg overflow-hidden border">
             <canvas id="mesh-canvas" class="w-full h-full"></canvas>
-            <div id="viewer-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-[10px] p-2 text-center pointer-events-none">
+            <div id="viewer-placeholder" class="absolute inset-0 flex flex-col items-center justify-center mp-text-faint text-[10px] p-2 text-center pointer-events-none">
               <span class="text-xl mb-1 opacity-40">📐</span>
               <span>Hasta seçin</span>
-              <span class="text-[9px] mt-1 text-gray-600">Büyütmek için çift tıklayın</span>
+              <span class="text-[9px] mt-1 opacity-70">Büyütmek için çift tıklayın</span>
             </div>
             </div>
           </div>
 
           <div class="px-2 pb-2 space-y-1.5 shrink-0 mt-auto">
             <button id="btn-align" disabled
-              class="w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              class="mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               title="Tarayıcı hizası otomatik kullanılır">
               ✅ Tarayıcı hizalı
             </button>
-            <div id="file-info-bar" class="px-2 py-1 rounded bg-anthracite-800 border border-anthracite-700 text-[9px] text-gray-500 truncate">
+            <div id="file-info-bar" class="mp-info-bar px-2 py-1 rounded text-[9px] truncate">
               Henüz dosya yok
             </div>
           </div>
@@ -126,10 +126,10 @@
     </div>
 
     <!-- Büyük önizleme overlay -->
-    <div id="preview-overlay" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
-      <div class="w-full max-w-5xl h-full max-h-[92vh] flex flex-col rounded-xl bg-anthracite-900 border border-anthracite-600 overflow-hidden shadow-2xl">
-        <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-anthracite-700 shrink-0">
-          <span class="text-sm font-medium text-gray-300 shrink-0">3B Önizleme</span>
+    <div id="preview-overlay" class="mp-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-6">
+      <div class="mp-modal w-full max-w-5xl h-full max-h-[92vh] flex flex-col rounded-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 py-2.5 mp-border-b shrink-0">
+          <span class="text-sm font-medium mp-text-title shrink-0">3B Önizleme</span>
           <div class="flex items-center gap-1.5 flex-1 justify-center">
             <button type="button" id="overlay-slot-upper" data-scan-type="upper"
               class="overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-anthracite-600 text-gray-400 transition-colors disabled:opacity-30"
@@ -141,40 +141,199 @@
               class="overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-anthracite-600 text-gray-400 transition-colors disabled:opacity-30"
               title="Kapanış göster/gizle">Kapanış</button>
           </div>
-          <button id="btn-close-preview" type="button" class="shrink-0 text-xs text-gray-400 hover:text-white px-2 py-1 rounded border border-anthracite-600">✕ Kapat</button>
+          <button id="btn-close-preview" type="button" class="mp-btn-ghost shrink-0 text-xs px-2 py-1 rounded">✕ Kapat</button>
         </div>
         <div id="viewer-overlay-host" class="flex-1 min-h-0 relative bg-[#1a2030]"></div>
       </div>
     </div>
 
     <!-- Ayarlar Modal -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="w-[480px] rounded-xl bg-anthracite-900 border border-anthracite-600 shadow-2xl p-6">
-        <h2 class="text-lg font-semibold mb-4">Ayarlar</h2>
-        <div class="mb-4">
-          <label class="block text-xs font-medium text-gray-300 mb-1.5">İzleme Klasörü</label>
-          <div class="flex gap-2">
-            <input id="watch-folder" type="text" readonly placeholder="Klasör seçilmedi"
-              class="flex-1 px-3 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-sm text-gray-300" />
-            <button id="btn-pick-folder" class="px-4 py-2 rounded-lg text-xs font-medium bg-medical-accent/20 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/30 transition-colors">Seç</button>
+    <div id="settings-modal" class="mp-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="mp-modal w-full max-w-[720px] max-h-[92vh] flex flex-col rounded-xl overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 mp-border-b shrink-0">
+          <h2 class="text-lg font-semibold mp-text-title" data-i18n="settings">Ayarlar</h2>
+          <button id="btn-settings-close" type="button" class="mp-btn-ghost text-lg leading-none px-2" title="Kapat">✕</button>
+        </div>
+
+        <div class="flex flex-1 min-h-0">
+          <nav class="settings-nav w-36 shrink-0 mp-border-r border-r p-2 space-y-0.5 overflow-y-auto" style="border-color: rgb(var(--mp-border))">
+            <button type="button" id="settings-tab-appearance" class="settings-tab active" data-i18n="tab_appearance">Görünüm</button>
+            <button type="button" id="settings-tab-layout" class="settings-tab" data-i18n="tab_layout">Düzen</button>
+            <button type="button" id="settings-tab-watch" class="settings-tab" data-i18n="tab_watch">İzleme</button>
+            <button type="button" id="settings-tab-upload" class="settings-tab" data-i18n="tab_upload">Gönderim</button>
+            <button type="button" id="settings-tab-preview" class="settings-tab" data-i18n="tab_preview">Önizleme</button>
+            <button type="button" id="settings-tab-alignment" class="settings-tab" data-i18n="tab_alignment">Hizalama</button>
+            <button type="button" id="settings-tab-general" class="settings-tab" data-i18n="tab_general">Genel</button>
+          </nav>
+
+          <div class="settings-panels flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+            <!-- Görünüm -->
+            <section id="settings-panel-appearance" class="settings-panel space-y-3">
+              <div>
+                <label class="settings-label" for="setting-theme" data-i18n="theme">Tema</label>
+                <select id="setting-theme" class="settings-input">
+                  <option value="dark" data-i18n="theme_dark">Koyu</option>
+                  <option value="light" data-i18n="theme_light">Açık</option>
+                  <option value="system" data-i18n="theme_system">Sistem</option>
+                </select>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-font-size" data-i18n="font_size">Yazı boyutu</label>
+                <select id="setting-font-size" class="settings-input">
+                  <option value="small" data-i18n="font_small">Küçük</option>
+                  <option value="normal" data-i18n="font_normal">Normal</option>
+                  <option value="large" data-i18n="font_large">Büyük</option>
+                </select>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-font-family" data-i18n="font_family">Yazı tipi</label>
+                <select id="setting-font-family" class="settings-input">
+                  <option value="system" data-i18n="font_system">Sistem</option>
+                  <option value="inter">Inter</option>
+                  <option value="mono" data-i18n="font_mono">Monospace</option>
+                </select>
+              </div>
+            </section>
+
+            <!-- Düzen -->
+            <section id="settings-panel-layout" class="settings-panel hidden space-y-3">
+              <div>
+                <label class="settings-label" for="setting-preview-width" data-i18n="preview_width">Önizleme genişliği (px)</label>
+                <input id="setting-preview-width" type="number" min="240" max="960" step="48" class="settings-input" />
+              </div>
+              <div>
+                <label class="settings-label" for="setting-preview-height" data-i18n="preview_height">Önizleme yüksekliği (px)</label>
+                <input id="setting-preview-height" type="number" min="180" max="720" step="60" class="settings-input" />
+              </div>
+              <div>
+                <label class="settings-label" for="setting-layout-order" data-i18n="layout_order">Panel sırası</label>
+                <select id="setting-layout-order" class="settings-input">
+                  <option value="list-preview" data-i18n="layout_list_preview">Liste — Önizleme</option>
+                  <option value="preview-list" data-i18n="layout_preview_list">Önizleme — Liste</option>
+                </select>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-layout-density" data-i18n="layout_density">Yoğunluk</label>
+                <select id="setting-layout-density" class="settings-input">
+                  <option value="compact" data-i18n="density_compact">Kompakt</option>
+                  <option value="comfortable" data-i18n="density_comfortable">Rahat</option>
+                </select>
+              </div>
+            </section>
+
+            <!-- İzleme -->
+            <section id="settings-panel-watch" class="settings-panel hidden space-y-3">
+              <div>
+                <label class="settings-label" for="setting-watch-folder" data-i18n="watch_folder">İzleme klasörü</label>
+                <div class="flex gap-2">
+                  <input id="setting-watch-folder" type="text" readonly placeholder="—" class="settings-input flex-1" />
+                  <button id="btn-pick-folder" type="button" class="settings-btn-secondary shrink-0" data-i18n="pick_folder">Seç</button>
+                </div>
+              </div>
+              <label class="settings-check">
+                <input id="setting-focus-new" type="checkbox" />
+                <span data-i18n="focus_on_new">Yeni dosyada pencereyi öne getir</span>
+              </label>
+              <div>
+                <label class="settings-label" for="setting-extensions" data-i18n="file_extensions">Dosya uzantıları</label>
+                <input id="setting-extensions" type="text" placeholder="stl, ply, dcm" class="settings-input" />
+              </div>
+            </section>
+
+            <!-- Gönderim -->
+            <section id="settings-panel-upload" class="settings-panel hidden space-y-3">
+              <div>
+                <label class="settings-label" data-i18n="drive_connect">Google Drive</label>
+                <button id="btn-drive-auth" type="button" class="settings-btn-secondary w-full" data-i18n="drive_connect">Google Drive'a Bağlan</button>
+                <p id="drive-status" class="text-xs text-gray-500 mt-1.5" data-i18n="drive_not_connected">Bağlı değil</p>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-drive-folder" data-i18n="drive_folder">Drive dosya öneki</label>
+                <input id="setting-drive-folder" type="text" class="settings-input" />
+              </div>
+              <div>
+                <label class="settings-label" for="setting-zip-template" data-i18n="zip_template">ZIP adı şablonu</label>
+                <input id="setting-zip-template" type="text" class="settings-input" />
+                <p class="text-[10px] text-gray-500 mt-1" data-i18n="zip_template_hint">{patient}, {date}, {time}</p>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-after-upload" data-i18n="after_upload">Yükleme sonrası</label>
+                <select id="setting-after-upload" class="settings-input">
+                  <option value="none" data-i18n="after_none">Dosyalara dokunma</option>
+                  <option value="delete" data-i18n="after_delete">Kaynak dosyaları sil</option>
+                  <option value="archive" data-i18n="after_archive">Arşiv klasörüne taşı</option>
+                </select>
+              </div>
+              <div id="setting-archive-row" class="hidden">
+                <label class="settings-label" for="setting-archive-folder" data-i18n="archive_folder">Arşiv klasörü</label>
+                <div class="flex gap-2">
+                  <input id="setting-archive-folder" type="text" readonly class="settings-input flex-1" />
+                  <button id="btn-pick-archive" type="button" class="settings-btn-secondary shrink-0" data-i18n="pick_folder">Seç</button>
+                </div>
+              </div>
+              <label class="settings-check">
+                <input id="setting-auto-upload" type="checkbox" />
+                <span data-i18n="auto_upload">3 tarama tamamlanınca otomatik gönder</span>
+              </label>
+            </section>
+
+            <!-- Önizleme -->
+            <section id="settings-panel-preview" class="settings-panel hidden space-y-3">
+              <label class="settings-check"><input id="setting-vis-upper" type="checkbox" /><span data-i18n="vis_upper">Üst çene görünür</span></label>
+              <label class="settings-check"><input id="setting-vis-lower" type="checkbox" /><span data-i18n="vis_lower">Alt çene görünür</span></label>
+              <label class="settings-check"><input id="setting-vis-bite" type="checkbox" /><span data-i18n="vis_bite">Kapanış görünür</span></label>
+              <div class="grid grid-cols-3 gap-2">
+                <div><label class="settings-label" for="setting-color-upper" data-i18n="color_upper">Üst</label><input id="setting-color-upper" type="color" class="settings-color" /></div>
+                <div><label class="settings-label" for="setting-color-lower" data-i18n="color_lower">Alt</label><input id="setting-color-lower" type="color" class="settings-color" /></div>
+                <div><label class="settings-label" for="setting-color-bite" data-i18n="color_bite">Kap.</label><input id="setting-color-bite" type="color" class="settings-color" /></div>
+              </div>
+              <div>
+                <label class="settings-label" for="setting-camera-preset" data-i18n="camera_preset">Kamera</label>
+                <select id="setting-camera-preset" class="settings-input">
+                  <option value="default" data-i18n="camera_default">Varsayılan</option>
+                  <option value="front" data-i18n="camera_front">Önden</option>
+                  <option value="occlusal" data-i18n="camera_occlusal">Oklüzal</option>
+                </select>
+              </div>
+            </section>
+
+            <!-- Hizalama -->
+            <section id="settings-panel-alignment" class="settings-panel hidden space-y-3">
+              <div>
+                <label class="settings-label" for="setting-lower-offset" data-i18n="lower_offset">Alt çene Z offset (mm)</label>
+                <input id="setting-lower-offset" type="number" step="0.5" class="settings-input" />
+              </div>
+              <div>
+                <label class="settings-label" data-i18n="icp_align">ICP Hizalama</label>
+                <button id="btn-icp-align" type="button" class="settings-btn-secondary w-full" data-i18n="icp_align">ICP ile yeniden hizala</button>
+                <p class="text-[10px] text-gray-500 mt-1.5" data-i18n="icp_hint">Tarayıcı hizası bozulabilir.</p>
+              </div>
+            </section>
+
+            <!-- Genel -->
+            <section id="settings-panel-general" class="settings-panel hidden space-y-3">
+              <div>
+                <label class="settings-label" for="setting-language" data-i18n="language">Dil</label>
+                <select id="setting-language" class="settings-input">
+                  <option value="tr">Türkçe</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+              <label class="settings-check">
+                <input id="setting-start-fullscreen" type="checkbox" />
+                <span data-i18n="start_fullscreen">Başlangıçta tam ekran</span>
+              </label>
+              <div>
+                <label class="settings-label" for="setting-session-timeout" data-i18n="session_timeout">Oturum zaman aşımı (dk)</label>
+                <input id="setting-session-timeout" type="number" min="1" max="120" class="settings-input" />
+              </div>
+            </section>
           </div>
         </div>
-        <div class="mb-4">
-          <label class="block text-xs font-medium text-gray-300 mb-1.5">Hizalama</label>
-          <button id="btn-icp-align" type="button"
-            class="w-full px-4 py-2.5 rounded-lg text-xs font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">
-            ICP ile yeniden hizala (deneysel)
-          </button>
-          <p class="text-[10px] text-gray-500 mt-1.5">Tarayıcı hizası bozulabilir. Sadece modeller kayıksa kullanın.</p>
-        </div>
-        <div class="mb-6">
-          <label class="block text-xs font-medium text-gray-300 mb-1.5">Google Drive</label>
-          <button id="btn-drive-auth" class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 transition-colors">Google Drive'a Bağlan</button>
-          <p id="drive-status" class="text-xs text-gray-500 mt-1.5">Bağlı değil</p>
-        </div>
-        <div class="flex justify-end gap-2">
-          <button id="btn-settings-close" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">Kapat</button>
-          <button id="btn-settings-save" class="px-4 py-2 rounded-lg text-sm font-medium bg-medical-accent text-white hover:bg-medical-accent/80 transition-colors">Kaydet ve Başlat</button>
+
+        <div class="flex justify-end gap-2 px-5 py-3 mp-border-t shrink-0">
+          <button id="btn-settings-cancel" type="button" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors" data-i18n="cancel">İptal</button>
+          <button id="btn-settings-save" type="button" class="px-4 py-2 rounded-lg text-sm font-medium bg-medical-accent text-white hover:bg-medical-accent/80 transition-colors" data-i18n="save">Kaydet</button>
         </div>
       </div>
     </div>

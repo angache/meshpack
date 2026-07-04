@@ -1,6 +1,5 @@
 import { classifyScanType, parsePatientName } from "./utils.js";
-
-const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 dakika
+import { getSessionTimeoutMs } from "./settings.js";
 
 /**
  * Aktif tarama oturumunu yönetir.
@@ -26,7 +25,7 @@ export class ScanSession {
   }
 
   isExpired() {
-    return Date.now() - this.lastActivity > SESSION_TIMEOUT_MS;
+    return Date.now() - this.lastActivity > getSessionTimeoutMs();
   }
 
   /**

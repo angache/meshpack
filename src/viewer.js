@@ -37,6 +37,8 @@ export class MeshViewer {
     this.animationId = null;
     this.aligned = false;
     this.visibility = { upper: true, lower: true, bite: false };
+    this.cameraPreset = "default";
+    this.scanColors = { ...SCAN_COLORS };
     this._init();
   }
 
@@ -194,9 +196,36 @@ export class MeshViewer {
     const maxDim = Math.max(size.x, size.y, size.z);
 
     this.controls.target.copy(center);
-    this.camera.position.set(center.x, center.y - maxDim * 0.8, center.z + maxDim * 1.4);
+
+    switch (this.cameraPreset) {
+      case "front":
+        this.camera.position.set(center.x, center.y + maxDim * 0.05, center.z + maxDim * 2.1);
+        break;
+      case "occlusal":
+        this.camera.position.set(center.x, center.y + maxDim * 2, center.z + maxDim * 0.2);
+        break;
+      default:
+        this.camera.position.set(center.x, center.y - maxDim * 0.8, center.z + maxDim * 1.4);
+    }
+
     this.camera.up.set(0, 1, 0);
     this.controls.update();
+  }
+
+  applyVisualSettings({ color_upper, color_lower, color_bite, camera_preset, lower_jaw_offset_mm }) {
+    if (color_upper) this.scanColors.upper = color_upper;
+    if (color_lower) this.scanColors.lower = color_lower;
+    if (color_bite) this.scanColors.bite = color_bite;
+    if (camera_preset) this.cameraPreset = camera_preset;
+
+    for (const [type, mesh] of Object.entries(this.meshes)) {
+      if (mesh?.material && this.scanColors[type]) {
+        mesh.material.color.setHex(this.scanColors[type]);
+      }
+    }
+
+    this.setLowerJawOffset(Number(lower_jaw_offset_mm) || 0);
+    if (Object.keys(this.meshes).length > 0) this._fitCamera();
   }
 
   async loadFile(filePath, type = "upper") {
@@ -218,7 +247,7 @@ export class MeshViewer {
 
     const isBite = type === "bite";
     const material = new THREE.MeshStandardMaterial({
-      color: SCAN_COLORS[type] || 0xeeeeee,
+      color: this.scanColors[type] || SCAN_COLORS[type] || 0xeeeeee,
       emissive: SCAN_EMISSIVE[type] || 0x111111,
       emissiveIntensity: 0.15,
       metalness: 0.05,

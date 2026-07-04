@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
-const SCAN_EXTENSIONS: &[&str] = &["stl", "ply", "dcm"];
+const DEFAULT_EXTENSIONS: &[&str] = &["stl", "ply", "dcm"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScanFileEntry {
@@ -13,7 +13,20 @@ pub struct ScanFileEntry {
     pub modified_at: i64,
 }
 
-pub fn list_scan_files(folder: &str) -> Result<Vec<ScanFileEntry>, String> {
+pub fn list_scan_files(folder: &str, extensions: &[String]) -> Result<Vec<ScanFileEntry>, String> {
+    let exts: Vec<String> = if extensions.is_empty() {
+        DEFAULT_EXTENSIONS
+            .iter()
+            .map(|e| e.to_string())
+            .collect()
+    } else {
+        extensions
+            .iter()
+            .map(|e| e.trim().trim_start_matches('.').to_lowercase())
+            .filter(|e| !e.is_empty())
+            .collect()
+    };
+
     let dir = Path::new(folder);
     if !dir.exists() {
         return Err(format!("Klasör bulunamadı: {folder}"));
@@ -28,7 +41,7 @@ pub fn list_scan_files(folder: &str) -> Result<Vec<ScanFileEntry>, String> {
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if !path.is_file() || !is_scan_file(&path) {
+        if !path.is_file() || !is_scan_file(&path, &exts) {
             continue;
         }
 
@@ -55,9 +68,9 @@ pub fn list_scan_files(folder: &str) -> Result<Vec<ScanFileEntry>, String> {
     Ok(entries)
 }
 
-fn is_scan_file(path: &Path) -> bool {
+fn is_scan_file(path: &Path, extensions: &[String]) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| SCAN_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+        .map(|ext| extensions.contains(&ext.to_lowercase()))
         .unwrap_or(false)
 }
