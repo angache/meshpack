@@ -180,6 +180,23 @@
                 <button type="button" id="planning-toggle-lower" class="planning-viewer-toggle is-off" data-scan-type="lower" disabled>Alt</button>
                 <button type="button" id="planning-toggle-bite" class="planning-viewer-toggle is-off" data-scan-type="bite" disabled>Kapanış</button>
               </div>
+              <div class="planning-annotate-bar mt-2 flex items-center gap-2">
+                <button type="button" id="btn-planning-annotate" class="planning-annotate-btn flex-1" disabled>📍 İşaretle</button>
+              </div>
+              <div id="planning-annotation-compose" class="planning-annotation-compose hidden mt-2">
+                <textarea id="planning-annotation-text" rows="2" class="planning-notes-input w-full rounded-lg px-2.5 py-2 text-xs resize-none"
+                  placeholder="Bu nokta için not…"></textarea>
+                <div class="flex gap-2 mt-1.5">
+                  <button type="button" id="planning-annotation-add" class="mp-btn-primary text-[10px] px-2.5 py-1 rounded-lg flex-1">Ekle</button>
+                  <button type="button" id="planning-annotation-cancel-compose" class="mp-btn-ghost text-[10px] px-2.5 py-1 rounded-lg">İptal</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">3B işaretler</h2>
+              <div id="planning-annotation-list" class="planning-annotation-list space-y-1.5">
+                <p class="text-[10px] mp-text-faint">İşaretle modunda modele tıklayın.</p>
+              </div>
             </div>
             <div>
               <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Ölçü seti</h2>

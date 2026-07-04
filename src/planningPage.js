@@ -10,6 +10,8 @@ import { patientListLabel } from "./patients.js";
 import { SCAN_LABELS, formatFileSize } from "./utils.js";
 import { askDetachReason } from "./caseModals.js";
 import { MeshViewer } from "./viewer.js";
+import { AnnotationLayer } from "./annotationLayer.js";
+import { parseAnnotations, serializeAnnotations } from "./annotations.js";
 import { getDefaultVisibility, getDentalTreatments, getSettings, hexToNumber, onSettingsChange } from "./settings.js";
 
 let context = null;
@@ -18,7 +20,11 @@ let onDataChange = null;
 let dirty = false;
 let dentalChart = null;
 let planningViewer = null;
+let annotationLayer = null;
 let planningVisibility = getDefaultVisibility();
+let annotateMode = false;
+/** @type {{ scanType: string, position: number[], normal: number[] } | null} */
+let pendingHit = null;
 
 const SCAN_TYPES = ["upper", "lower", "bite"];
 
@@ -37,6 +43,20 @@ function initPlanningViewer() {
   const canvas = el("planning-mesh-canvas");
   if (!canvas || planningViewer) return;
   planningViewer = new MeshViewer(canvas);
+  annotationLayer = new AnnotationLayer(planningViewer);
+  annotationLayer.onChange = () => {
+    dirty = true;
+    renderAnnotationList();
+  };
+  annotationLayer.onPlaceRequest = (hit) => {
+    pendingHit = {
+      scanType: hit.scanType,
+      position: hit.position,
+      normal: hit.normal,
+    };
+    showAnnotationCompose(true);
+    el("planning-annotation-text")?.focus();
+  };
   applyPlanningViewerSettings();
 }
 
@@ -49,6 +69,81 @@ function applyPlanningViewerSettings() {
     camera_preset: s.camera_preset,
     lower_jaw_offset_mm: s.lower_jaw_offset_mm,
   });
+  annotationLayer?.syncPositions();
+}
+
+function showAnnotationCompose(show) {
+  el("planning-annotation-compose")?.classList.toggle("hidden", !show);
+  if (!show) {
+    pendingHit = null;
+    const input = el("planning-annotation-text");
+    if (input) input.value = "";
+  }
+}
+
+function setAnnotateMode(on) {
+  annotateMode = !!on;
+  annotationLayer?.setMode(annotateMode);
+  const btn = el("btn-planning-annotate");
+  if (btn) {
+    btn.classList.toggle("is-active", annotateMode);
+    btn.textContent = annotateMode ? "📍 İşaretleme açık" : "📍 İşaretle";
+  }
+  if (!annotateMode) showAnnotationCompose(false);
+}
+
+function renderAnnotationList() {
+  const listEl = el("planning-annotation-list");
+  if (!listEl || !annotationLayer) return;
+
+  const markers = annotationLayer.getAnnotations().markers;
+  if (!markers.length) {
+    listEl.innerHTML = `<p class="text-[10px] mp-text-faint">${annotateMode ? "Modele tıklayarak işaret ekleyin." : "Henüz işaret yok."}</p>`;
+    return;
+  }
+
+  listEl.innerHTML = markers
+    .map(
+      (m, i) => `
+      <div class="planning-annotation-item" data-annotation-id="${m.id}">
+        <div class="planning-annotation-item-head">
+          <span class="planning-annotation-badge">${i + 1}</span>
+          <span class="planning-annotation-scan">${SCAN_LABELS[m.scanType] || m.scanType}</span>
+          <button type="button" class="planning-annotation-remove mp-btn-ghost text-[10px] text-red-400 px-1" data-remove-annotation="${m.id}">Sil</button>
+        </div>
+        <p class="planning-annotation-text">${escapeHtml(m.text || "—")}</p>
+      </div>`
+    )
+    .join("");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function loadAnnotations(raw) {
+  initPlanningViewer();
+  annotationLayer?.setAnnotations(raw || "{}");
+  renderAnnotationList();
+}
+
+function confirmPendingAnnotation() {
+  if (!pendingHit || !annotationLayer) return;
+  const text = el("planning-annotation-text")?.value?.trim() ?? "";
+  if (!text) {
+    alert("Lütfen bir not yazın.");
+    return;
+  }
+  annotationLayer.addMarker({ ...pendingHit, text });
+  showAnnotationCompose(false);
+}
+
+function updateAnnotateButtonState(hasMesh) {
+  const btn = el("btn-planning-annotate");
+  if (btn) btn.disabled = !hasMesh;
 }
 
 function updatePlanningViewerToggles() {
@@ -100,6 +195,9 @@ async function loadPlanningScans(scanSession) {
   }
 
   updatePlanningViewerToggles();
+  updateAnnotateButtonState(loaded > 0);
+  annotationLayer?.refresh();
+  annotationLayer?.syncPositions();
 }
 
 function togglePlanningScan(type) {
@@ -111,9 +209,13 @@ function togglePlanningScan(type) {
 }
 
 function clearPlanningViewer() {
+  setAnnotateMode(false);
+  annotationLayer?.clear();
   planningViewer?.clearAll();
   el("planning-viewer-placeholder")?.classList.remove("hidden");
   updatePlanningViewerToggles();
+  updateAnnotateButtonState(false);
+  renderAnnotationList();
 }
 
 function renderScanList(session) {
@@ -216,6 +318,15 @@ export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChan
     el(`planning-toggle-${type}`)?.addEventListener("click", () => togglePlanningScan(type));
   }
 
+  el("btn-planning-annotate")?.addEventListener("click", () => setAnnotateMode(!annotateMode));
+  el("planning-annotation-add")?.addEventListener("click", () => confirmPendingAnnotation());
+  el("planning-annotation-cancel-compose")?.addEventListener("click", () => showAnnotationCompose(false));
+  el("planning-annotation-list")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-remove-annotation]");
+    if (!btn) return;
+    annotationLayer?.removeMarker(btn.dataset.removeAnnotation);
+  });
+
   onSettingsChange(() => {
     applyPlanningViewerSettings();
     requestAnimationFrame(() => {
@@ -244,6 +355,7 @@ export async function openPlanning(patient, scanSession) {
   renderHeader(caseRow, patient);
   renderScanList(scanSession);
   await loadPlanningScans(scanSession);
+  loadAnnotations(caseRow.annotations || "{}");
 
   el("new-scan-banner")?.classList.add("hidden");
   el("main-layout")?.classList.add("hidden");
@@ -294,9 +406,10 @@ async function savePlanning() {
   if (!context) return null;
   const notes = el("planning-lab-notes")?.value?.trim() ?? "";
   const dentalPlan = serializeDentalPlan(dentalChart?.getPlan() || emptyPlan());
+  const annotations = serializeAnnotations(annotationLayer?.getAnnotations() || {});
 
   try {
-    const updated = await updateCasePlanning(context.caseRow.id, notes, dentalPlan);
+    const updated = await updateCasePlanning(context.caseRow.id, notes, dentalPlan, annotations);
     context.caseRow = updated;
     dirty = false;
     renderHeader(updated, context.patient);

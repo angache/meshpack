@@ -109,6 +109,7 @@ export class MeshViewer {
   _animate() {
     this.animationId = requestAnimationFrame(() => this._animate());
     this.controls.update();
+    this.onBeforeRender?.();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -237,6 +238,7 @@ export class MeshViewer {
   async addScan(filePath, type) {
     const geometry = await this._loadGeometry(filePath);
     geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
     this.scanPaths[type] = filePath;
 
     if (this.meshes[type]) {

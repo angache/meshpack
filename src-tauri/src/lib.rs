@@ -277,10 +277,11 @@ fn update_case_planning(
     case_id: String,
     lab_notes: String,
     dental_plan: String,
+    annotations: String,
     state: State<'_, AppState>,
 ) -> Result<Case, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    db::update_case_planning(&conn, &case_id, &lab_notes, &dental_plan)
+    db::update_case_planning(&conn, &case_id, &lab_notes, &dental_plan, &annotations)
 }
 
 #[tauri::command]

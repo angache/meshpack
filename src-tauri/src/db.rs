@@ -29,6 +29,7 @@ pub struct Case {
     pub session_day: String,
     pub lab_notes: String,
     pub dental_plan: String,
+    pub annotations: String,
     pub created_at: i64,
     pub updated_at: i64,
     pub sent_at: Option<i64>,
@@ -108,6 +109,15 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     if !has_dental_plan {
         conn.execute(
             "ALTER TABLE cases ADD COLUMN dental_plan TEXT NOT NULL DEFAULT '{}'",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let has_annotations = table_has_column(conn, "cases", "annotations")?;
+    if !has_annotations {
+        conn.execute(
+            "ALTER TABLE cases ADD COLUMN annotations TEXT NOT NULL DEFAULT '{\"version\":1,\"markers\":[]}'",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -353,15 +363,16 @@ fn row_to_case(row: &rusqlite::Row<'_>) -> rusqlite::Result<Case> {
         session_day: row.get(4)?,
         lab_notes: row.get(5)?,
         dental_plan: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
-        sent_at: row.get(9)?,
-        scan_count: row.get(10)?,
+        annotations: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+        sent_at: row.get(10)?,
+        scan_count: row.get(11)?,
     })
 }
 
 const CASE_SELECT: &str = "SELECT c.id, c.patient_id, c.case_number, c.status, c.session_day,
-    c.lab_notes, c.dental_plan, c.created_at, c.updated_at, c.sent_at,
+    c.lab_notes, c.dental_plan, c.annotations, c.created_at, c.updated_at, c.sent_at,
     (SELECT COUNT(*) FROM scan_links s WHERE s.case_id = c.id) AS scan_count";
 
 pub fn list_patients(conn: &Connection) -> Result<Vec<Patient>, String> {
@@ -609,21 +620,26 @@ pub fn update_case_planning(
     case_id: &str,
     lab_notes: &str,
     dental_plan: &str,
+    annotations: &str,
 ) -> Result<Case, String> {
     if serde_json::from_str::<serde_json::Value>(dental_plan).is_err() {
         return Err("Geçersiz diş planı formatı".to_string());
+    }
+    if serde_json::from_str::<serde_json::Value>(annotations).is_err() {
+        return Err("Geçersiz annotation formatı".to_string());
     }
 
     let ts = now_ts();
     let changed = conn
         .execute(
-            "UPDATE cases SET lab_notes = ?2, dental_plan = ?3, updated_at = ?4,
-             status = CASE WHEN status = ?5 THEN ?6 ELSE status END
+            "UPDATE cases SET lab_notes = ?2, dental_plan = ?3, annotations = ?4, updated_at = ?5,
+             status = CASE WHEN status = ?6 THEN ?7 ELSE status END
              WHERE id = ?1",
             params![
                 case_id,
                 lab_notes.trim(),
                 dental_plan.trim(),
+                annotations.trim(),
                 ts,
                 CASE_STATUS_LINKED,
                 CASE_STATUS_PLANNING
