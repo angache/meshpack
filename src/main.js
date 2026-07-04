@@ -13,7 +13,7 @@ import {
   patientKey,
   SCAN_LABELS,
 } from "./utils.js";
-import { matrixToArray } from "./alignment.js";
+import { identityTransformSet, matrixToArray } from "./alignment.js";
 
 const statusBadge = document.getElementById("status-badge");
 const statusText = document.getElementById("status-text");
@@ -179,9 +179,29 @@ function setStatus(mode, text) {
   }
 }
 
+function markSessionAligned(transforms, { fromScanner = false } = {}) {
+  session.aligned = true;
+  session.transforms = transforms;
+  setStatus(
+    "aligned",
+    fromScanner ? "✅ Tarayıcı hizası kullanılıyor" : "✅ Çeneler kapanışa göre hizalandı"
+  );
+  btnAlign.textContent = fromScanner ? "✅ Tarayıcı hizalı" : "✅ Hizalandı";
+  btnAlign.classList.add("done");
+  btnAlign.disabled = true;
+  updateScanSlots();
+}
+
+function acceptScannerAlignment() {
+  if (!session.isComplete()) return;
+  if (!viewer.hasMesh("upper") || !viewer.hasMesh("lower") || !viewer.hasMesh("bite")) return;
+  viewer.aligned = true;
+  markSessionAligned(identityTransformSet(), { fromScanner: true });
+}
+
 function resetAlignButton() {
   btnAlign.disabled = true;
-  btnAlign.textContent = "🔗 Hizala";
+  btnAlign.textContent = "3 tarama bekleniyor";
   btnAlign.className =
     "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
 }
@@ -237,11 +257,18 @@ function updateScanSlots() {
 
   const complete = session.isComplete();
   btnAlign.disabled = !complete || session.aligned;
-  btnAlign.className = session.aligned
-    ? "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium done border transition-colors"
-    : complete
-      ? "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium ready border transition-colors"
-      : "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  if (!complete) {
+    btnAlign.textContent = "3 tarama bekleniyor";
+    btnAlign.className =
+      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  } else if (session.aligned) {
+    btnAlign.className =
+      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium done border transition-colors";
+  } else {
+    btnAlign.textContent = "✅ Hazır";
+    btnAlign.className =
+      "w-full px-2 py-1.5 rounded-lg text-[10px] font-medium ready border transition-colors";
+  }
 
   btnUpload.disabled = session.getCompletedCount() === 0;
   updateOverlayScanToggles();
@@ -332,6 +359,7 @@ async function selectPatient(patient) {
   if (loaded > 0) {
     viewerPlaceholder.classList.add("hidden");
     viewer._fitCamera();
+    acceptScannerAlignment();
   } else {
     viewerPlaceholder.classList.remove("hidden");
   }
@@ -390,6 +418,7 @@ async function addScanFromWatcher({ path, filename, size_bytes }) {
     viewer.setVisible(type, visibility[type]);
     viewerPlaceholder.classList.add("hidden");
     viewer._fitCamera();
+    acceptScannerAlignment();
   } catch (err) {
     console.warn("3B önizleme yüklenemedi:", err);
   }
@@ -424,11 +453,25 @@ for (const type of SCAN_TYPES) {
   });
 }
 
-btnAlign.addEventListener("click", async () => {
-  if (!session.isComplete()) return;
+btnAlign.addEventListener("click", () => {
+  if (session.aligned) return;
+  acceptScannerAlignment();
+});
 
-  btnAlign.disabled = true;
-  btnAlign.textContent = "⏳ Hizalanıyor...";
+document.getElementById("btn-icp-align")?.addEventListener("click", async () => {
+  if (!session.isComplete()) {
+    alert("ICP hizalama için üst, alt ve kapanış taraması gerekli.");
+    return;
+  }
+
+  const proceed = confirm(
+    "ICP hizalama tarayıcıdan gelen doğru hizayı bozabilir.\n\nSadece modeller belirgin şekilde kayıksa kullanın. Devam edilsin mi?"
+  );
+  if (!proceed) return;
+
+  const btn = document.getElementById("btn-icp-align");
+  btn.disabled = true;
+  btn.textContent = "⏳ ICP çalışıyor...";
 
   try {
     for (const type of SCAN_TYPES) {
@@ -437,22 +480,18 @@ btnAlign.addEventListener("click", async () => {
     }
 
     const transforms = await viewer.alignBite();
-    session.aligned = true;
     session.transforms = {
       upper: matrixToArray(transforms.upper),
       bite: matrixToArray(transforms.bite),
       lower: matrixToArray(transforms.lower),
     };
-
-    setStatus("aligned", "✅ Çeneler kapanışa göre hizalandı");
-    btnAlign.textContent = "✅ Hizalandı";
-    btnAlign.classList.add("done");
-    updateScanSlots();
+    markSessionAligned(session.transforms, { fromScanner: false });
   } catch (err) {
-    console.error("Hizalama hatası:", err);
-    btnAlign.disabled = false;
-    btnAlign.textContent = "🔗 Hizala";
-    alert(`Hizalama başarısız: ${err.message || err}`);
+    console.error("ICP hizalama hatası:", err);
+    alert(`ICP hizalama başarısız: ${err.message || err}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "ICP ile yeniden hizala (deneysel)";
   }
 });
 
@@ -531,7 +570,7 @@ btnUpload.addEventListener("click", async () => {
 
   if (session.isComplete() && !session.aligned) {
     const proceed = confirm(
-      "Çeneler henüz hizalanmadı. Yine de yüklemek istiyor musunuz?\n\nÖnerilen: Önce 'Otomatik Hizala' butonuna basın."
+      "Üç tarama tamamlandı ancak hizalama onaylanmadı. Yine de yüklemek istiyor musunuz?"
     );
     if (!proceed) return;
   }

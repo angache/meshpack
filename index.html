@@ -73,7 +73,7 @@
         </section>
 
         <!-- SAĞ: Kompakt önizleme -->
-        <aside id="preview-panel" class="preview-panel w-72 shrink-0 flex flex-col border-l border-anthracite-600 bg-anthracite-900">
+        <aside id="preview-panel" class="preview-panel w-[36rem] shrink-0 flex flex-col border-l border-anthracite-600 bg-anthracite-900">
           <div class="px-3 py-2 flex items-center justify-between border-b border-anthracite-700 shrink-0">
             <span class="text-[10px] font-medium text-gray-400">Önizleme <span class="text-gray-600">· çift tıkla</span></span>
             <button id="btn-expand-preview" type="button" class="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Büyüt">⛶</button>
@@ -113,8 +113,9 @@
 
           <div class="px-2 pb-2 space-y-1.5 shrink-0 mt-auto">
             <button id="btn-align" disabled
-              class="w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              🔗 Hizala
+              class="w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Tarayıcı hizası otomatik kullanılır">
+              ✅ Tarayıcı hizalı
             </button>
             <div id="file-info-bar" class="px-2 py-1 rounded bg-anthracite-800 border border-anthracite-700 text-[9px] text-gray-500 truncate">
               Henüz dosya yok
@@ -157,6 +158,14 @@
               class="flex-1 px-3 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-sm text-gray-300" />
             <button id="btn-pick-folder" class="px-4 py-2 rounded-lg text-xs font-medium bg-medical-accent/20 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/30 transition-colors">Seç</button>
           </div>
+        </div>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-gray-300 mb-1.5">Hizalama</label>
+          <button id="btn-icp-align" type="button"
+            class="w-full px-4 py-2.5 rounded-lg text-xs font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">
+            ICP ile yeniden hizala (deneysel)
+          </button>
+          <p class="text-[10px] text-gray-500 mt-1.5">Tarayıcı hizası bozulabilir. Sadece modeller kayıksa kullanın.</p>
         </div>
         <div class="mb-6">
           <label class="block text-xs font-medium text-gray-300 mb-1.5">Google Drive</label>

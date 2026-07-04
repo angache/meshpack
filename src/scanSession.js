@@ -89,7 +89,7 @@ export class ScanSession {
     const count = this.getCompletedCount();
     if (count === 0) return "Tarama bekleniyor";
     if (count < 3) return `${count}/3 tarama alındı`;
-    if (this.aligned) return "✅ Çeneler hizalandı";
-    return "3/3 tarama — hizalama bekliyor";
+    if (this.aligned) return "✅ Tarayıcı hizası hazır";
+    return "3/3 tarama — hazır";
   }
 }

@@ -32,6 +32,7 @@ export class MeshViewer {
     this.renderer = null;
     this.controls = null;
     this.meshes = {};
+    this.scanPaths = {};
     this.meshGroup = null;
     this.animationId = null;
     this.aligned = false;
@@ -129,11 +130,35 @@ export class MeshViewer {
       mesh.material.dispose();
     }
     this.meshes = {};
+    this.scanPaths = {};
+    this.aligned = false;
+  }
+
+  _resetMeshTransform(mesh) {
+    mesh.position.set(0, 0, 0);
+    mesh.rotation.set(0, 0, 0);
+    mesh.scale.set(1, 1, 1);
+    mesh.updateMatrix();
+  }
+
+  async _reloadAllScansFromDisk() {
+    for (const type of ["upper", "lower", "bite"]) {
+      const path = this.scanPaths[type];
+      const mesh = this.meshes[type];
+      if (!path || !mesh) continue;
+
+      const geometry = await this._loadGeometry(path);
+      geometry.computeVertexNormals();
+      mesh.geometry.dispose();
+      mesh.geometry = geometry;
+      this._resetMeshTransform(mesh);
+    }
     this.aligned = false;
   }
 
   clearAll() {
     this._clearMeshes();
+    this.scanPaths = {};
     this.visibility = { upper: true, lower: true, bite: false };
   }
 
@@ -170,6 +195,7 @@ export class MeshViewer {
 
     this.controls.target.copy(center);
     this.camera.position.set(center.x, center.y - maxDim * 0.8, center.z + maxDim * 1.4);
+    this.camera.up.set(0, 1, 0);
     this.controls.update();
   }
 
@@ -182,6 +208,7 @@ export class MeshViewer {
   async addScan(filePath, type) {
     const geometry = await this._loadGeometry(filePath);
     geometry.computeVertexNormals();
+    this.scanPaths[type] = filePath;
 
     if (this.meshes[type]) {
       this.meshGroup.remove(this.meshes[type]);
@@ -206,6 +233,7 @@ export class MeshViewer {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = type;
     mesh.visible = this.visibility[type] ?? true;
+    this._resetMeshTransform(mesh);
     this.meshes[type] = mesh;
     this.meshGroup.add(mesh);
     this.aligned = false;
@@ -215,6 +243,8 @@ export class MeshViewer {
     if (!this.meshes.upper || !this.meshes.lower || !this.meshes.bite) {
       throw new Error("Hizalama için üç tarama da gerekli");
     }
+
+    await this._reloadAllScansFromDisk();
 
     const transforms = alignBiteRegistration({
       upper: { mesh: this.meshes.upper, geometry: this.meshes.upper.geometry },

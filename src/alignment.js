@@ -158,6 +158,21 @@ export function icpAlign(sourceGeometry, targetGeometry) {
 }
 
 /**
+ * İki geometri arasındaki ortalama en yakın nokta mesafesi (kayıt kalitesi).
+ */
+export function measureRegistrationError(sourceGeometry, targetGeometry) {
+  const srcPoints = samplePoints(sourceGeometry, 300);
+  const tgtPoints = samplePoints(targetGeometry, 400);
+  if (srcPoints.length === 0 || tgtPoints.length === 0) return Infinity;
+
+  let total = 0;
+  for (const sp of srcPoints) {
+    total += sp.distanceTo(nearestNeighbor(sp, tgtPoints));
+  }
+  return total / srcPoints.length;
+}
+
+/**
  * Exocad benzeri 3 adımlı kapanış hizalama:
  * 1. Üst çene = referans (sabit)
  * 2. Kapanış taraması → üst çeneye hizala
@@ -191,4 +206,9 @@ export function alignBiteRegistration(meshes) {
  */
 export function matrixToArray(matrix) {
   return matrix.elements.slice();
+}
+
+export function identityTransformSet() {
+  const id = matrixToArray(new THREE.Matrix4().identity());
+  return { upper: id, bite: id, lower: id };
 }
