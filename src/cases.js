@@ -11,10 +11,11 @@ export async function getCase(caseId) {
   return invoke("get_case", { caseId });
 }
 
-export async function updateCasePlanning(caseId, labNotes, dentalPlan, annotations) {
+export async function updateCasePlanning(caseId, labNotes, toothShade, dentalPlan, annotations) {
   return invoke("update_case_planning", {
     caseId,
     labNotes,
+    toothShade: toothShade ?? "",
     dentalPlan: typeof dentalPlan === "string" ? dentalPlan : JSON.stringify(dentalPlan),
     annotations:
       typeof annotations === "string" ? annotations : JSON.stringify(annotations ?? { version: 1, markers: [] }),

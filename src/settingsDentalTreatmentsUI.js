@@ -85,8 +85,11 @@ function renderRow(item, index, total) {
           <span class="dental-treatment-field-label-text">Harfi</span>
           <input type="text" class="settings-input dental-treatment-abbr" maxlength="2" value="${escapeAttr(item.abbr)}" placeholder="K" />
         </div>
-        <div class="dental-treatment-field dental-treatment-field-color">
-          <span class="dental-treatment-field-label-text">Renk</span>
+      </div>
+      <div class="dental-treatment-row-color">
+        <span class="dental-treatment-field-label-text">Chart rengi</span>
+        <div class="dental-treatment-color-wrap">
+          <span class="dental-treatment-color-swatch fdi-t-${item.color}" aria-hidden="true"></span>
           <select class="settings-input dental-treatment-color">${colorOptions(item.color)}</select>
         </div>
       </div>
@@ -158,6 +161,10 @@ export function mountDentalTreatmentsEditor(container, treatments, onChange) {
         const index = Number(row?.dataset.index);
         if (Number.isNaN(index)) return;
         list[index].color = e.target.value;
+        const swatch = row?.querySelector(".dental-treatment-color-swatch");
+        if (swatch) {
+          swatch.className = `dental-treatment-color-swatch fdi-t-${e.target.value}`;
+        }
         emit();
       });
     });

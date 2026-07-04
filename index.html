@@ -155,13 +155,38 @@
           <section class="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
             <div>
               <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Laboratuvar notu</h2>
-              <p class="text-[10px] mp-text-faint mb-2">Bu not yalnızca bu vakaya kaydedilir ve gönderimde kullanılır.</p>
-              <textarea id="planning-lab-notes" rows="6" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[8rem]"
-                placeholder="İş emri detayları, materyal, renk, özel talimatlar…"></textarea>
+              <p class="text-[10px] mp-text-faint mb-2">Materyal, talimat ve özel notlar.</p>
+              <textarea id="planning-lab-notes" rows="5" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[6rem]"
+                placeholder="Zirkonyum, kapanış kontrolü, özel talimatlar…"></textarea>
+            </div>
+
+            <div class="planning-shade-block">
+              <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Diş rengi</h2>
+              <p class="text-[10px] mp-text-faint mb-2">Vaka için tek VITA rengi — Classical veya 3D-Master.</p>
+              <div class="planning-shade-tabs" role="tablist">
+                <button type="button" id="planning-shade-tab-classical" class="planning-shade-tab is-active" data-shade-tab="classical" role="tab">Classical (A–D)</button>
+                <button type="button" id="planning-shade-tab-3d" class="planning-shade-tab" data-shade-tab="3d-master" role="tab">3D-Master</button>
+              </div>
+              <select id="planning-tooth-shade-classical" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm planning-shade-select" aria-label="VITA Classical"></select>
+              <select id="planning-tooth-shade-3d" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm planning-shade-select hidden" aria-label="VITA 3D-Master"></select>
             </div>
 
             <div>
               <div id="dental-chart-root" class="fdi-chart-root"></div>
+            </div>
+
+            <div class="planning-send-section">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide">Gönderim özeti</h2>
+                <span class="text-[10px] mp-text-faint">Lab / e-posta / Drive</span>
+              </div>
+              <pre id="planning-send-summary" class="planning-send-summary"></pre>
+              <div class="planning-send-actions">
+                <button type="button" id="btn-planning-copy-summary" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg">Özeti kopyala</button>
+                <button type="button" id="btn-planning-email" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg">E-posta</button>
+                <button type="button" id="btn-planning-upload" class="mp-btn-primary text-[10px] px-2.5 py-1.5 rounded-lg">Drive'a yükle</button>
+              </div>
+              <p id="planning-send-status" class="planning-send-status hidden"></p>
             </div>
           </section>
 

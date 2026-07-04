@@ -28,6 +28,7 @@ pub struct Case {
     pub status: String,
     pub session_day: String,
     pub lab_notes: String,
+    pub tooth_shade: String,
     pub dental_plan: String,
     pub annotations: String,
     pub created_at: i64,
@@ -118,6 +119,15 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     if !has_annotations {
         conn.execute(
             "ALTER TABLE cases ADD COLUMN annotations TEXT NOT NULL DEFAULT '{\"version\":1,\"markers\":[]}'",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let has_tooth_shade = table_has_column(conn, "cases", "tooth_shade")?;
+    if !has_tooth_shade {
+        conn.execute(
+            "ALTER TABLE cases ADD COLUMN tooth_shade TEXT NOT NULL DEFAULT ''",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -362,17 +372,18 @@ fn row_to_case(row: &rusqlite::Row<'_>) -> rusqlite::Result<Case> {
         status: row.get(3)?,
         session_day: row.get(4)?,
         lab_notes: row.get(5)?,
-        dental_plan: row.get(6)?,
-        annotations: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
-        sent_at: row.get(10)?,
-        scan_count: row.get(11)?,
+        tooth_shade: row.get(6)?,
+        dental_plan: row.get(7)?,
+        annotations: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+        sent_at: row.get(11)?,
+        scan_count: row.get(12)?,
     })
 }
 
 const CASE_SELECT: &str = "SELECT c.id, c.patient_id, c.case_number, c.status, c.session_day,
-    c.lab_notes, c.dental_plan, c.annotations, c.created_at, c.updated_at, c.sent_at,
+    c.lab_notes, c.tooth_shade, c.dental_plan, c.annotations, c.created_at, c.updated_at, c.sent_at,
     (SELECT COUNT(*) FROM scan_links s WHERE s.case_id = c.id) AS scan_count";
 
 pub fn list_patients(conn: &Connection) -> Result<Vec<Patient>, String> {
@@ -619,6 +630,7 @@ pub fn update_case_planning(
     conn: &Connection,
     case_id: &str,
     lab_notes: &str,
+    tooth_shade: &str,
     dental_plan: &str,
     annotations: &str,
 ) -> Result<Case, String> {
@@ -632,12 +644,13 @@ pub fn update_case_planning(
     let ts = now_ts();
     let changed = conn
         .execute(
-            "UPDATE cases SET lab_notes = ?2, dental_plan = ?3, annotations = ?4, updated_at = ?5,
-             status = CASE WHEN status = ?6 THEN ?7 ELSE status END
+            "UPDATE cases SET lab_notes = ?2, tooth_shade = ?3, dental_plan = ?4, annotations = ?5, updated_at = ?6,
+             status = CASE WHEN status = ?7 THEN ?8 ELSE status END
              WHERE id = ?1",
             params![
                 case_id,
                 lab_notes.trim(),
+                tooth_shade.trim(),
                 dental_plan.trim(),
                 annotations.trim(),
                 ts,

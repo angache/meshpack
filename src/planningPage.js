@@ -5,6 +5,7 @@ import {
   updateCasePlanning,
   updateCaseStatus,
 } from "./cases.js";
+import { buildCaseSummary, buildMailtoLink, buildUploadPatientName } from "./caseSummary.js";
 import { createDentalChart, parseDentalPlan, serializeDentalPlan } from "./dentalChart.js";
 import { patientListLabel } from "./patients.js";
 import { SCAN_LABELS, formatFileSize } from "./utils.js";
@@ -13,6 +14,15 @@ import { MeshViewer } from "./viewer.js";
 import { AnnotationLayer } from "./annotationLayer.js";
 import { parseAnnotations, serializeAnnotations } from "./annotations.js";
 import { getDefaultVisibility, getDentalTreatments, getSettings, hexToNumber, onSettingsChange } from "./settings.js";
+import {
+  VITA_CLASSICAL,
+  VITA_3D_MASTER,
+  detectVitaScale,
+  normalizeShadeCode,
+  populateShadeSelect,
+} from "./config/vitaShades.js";
+import { invoke } from "@tauri-apps/api/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 let context = null;
 let onClose = null;
@@ -25,6 +35,58 @@ let planningVisibility = getDefaultVisibility();
 let annotateMode = false;
 /** @type {{ scanType: string, position: number[], normal: number[] } | null} */
 let pendingHit = null;
+let shadeSelectorsReady = false;
+
+function initShadeSelectors() {
+  if (shadeSelectorsReady) return;
+  populateShadeSelect(el("planning-tooth-shade-classical"), VITA_CLASSICAL);
+  populateShadeSelect(el("planning-tooth-shade-3d"), VITA_3D_MASTER);
+  shadeSelectorsReady = true;
+}
+
+function switchShadeTab(tabId) {
+  const isClassical = tabId === VITA_CLASSICAL.id;
+  el("planning-shade-tab-classical")?.classList.toggle("is-active", isClassical);
+  el("planning-shade-tab-3d")?.classList.toggle("is-active", !isClassical);
+  el("planning-tooth-shade-classical")?.classList.toggle("hidden", !isClassical);
+  el("planning-tooth-shade-3d")?.classList.toggle("hidden", isClassical);
+}
+
+function getToothShade() {
+  const classical = el("planning-tooth-shade-classical")?.value ?? "";
+  const master = el("planning-tooth-shade-3d")?.value ?? "";
+  return normalizeShadeCode(classical || master);
+}
+
+function setToothShade(value) {
+  initShadeSelectors();
+  const shade = normalizeShadeCode(value);
+  const scale = detectVitaScale(shade);
+  switchShadeTab(scale);
+
+  const classical = el("planning-tooth-shade-classical");
+  const master = el("planning-tooth-shade-3d");
+
+  if (scale === VITA_CLASSICAL.id) {
+    populateShadeSelect(classical, VITA_CLASSICAL, shade);
+    if (master) master.value = "";
+  } else {
+    populateShadeSelect(master, VITA_3D_MASTER, shade);
+    if (classical) classical.value = "";
+  }
+}
+
+function onShadeChange(fromScale) {
+  dirty = true;
+  if (fromScale === VITA_CLASSICAL.id) {
+    const master = el("planning-tooth-shade-3d");
+    if (master) master.value = "";
+  } else {
+    const classical = el("planning-tooth-shade-classical");
+    if (classical) classical.value = "";
+  }
+  renderSendSummary();
+}
 
 const SCAN_TYPES = ["upper", "lower", "bite"];
 
@@ -47,6 +109,7 @@ function initPlanningViewer() {
   annotationLayer.onChange = () => {
     dirty = true;
     renderAnnotationList();
+    renderSendSummary();
   };
   annotationLayer.onPlaceRequest = (hit) => {
     pendingHit = {
@@ -144,6 +207,114 @@ function confirmPendingAnnotation() {
 function updateAnnotateButtonState(hasMesh) {
   const btn = el("btn-planning-annotate");
   if (btn) btn.disabled = !hasMesh;
+}
+
+function getSummaryInput() {
+  if (!context) return null;
+  return {
+    caseRow: context.caseRow,
+    patient: context.patient,
+    scanSession: context.scanSession,
+    labNotes: el("planning-lab-notes")?.value ?? "",
+    toothShade: getToothShade(),
+    dentalPlanRaw: serializeDentalPlan(dentalChart?.getPlan() || emptyPlan()),
+    annotationsRaw: serializeAnnotations(annotationLayer?.getAnnotations() || {}),
+    treatments: getDentalTreatments(),
+  };
+}
+
+function renderSendSummary() {
+  const pre = el("planning-send-summary");
+  if (!pre || !context) {
+    if (pre) pre.textContent = "";
+    return;
+  }
+  pre.textContent = buildCaseSummary(getSummaryInput());
+
+  const uploadBtn = el("btn-planning-upload");
+  const scans = context.scanSession?.scans || {};
+  const hasFiles = ["upper", "lower", "bite"].some((t) => scans[t]);
+  if (uploadBtn) {
+    uploadBtn.disabled = !hasFiles || context.caseRow.status === "sent";
+    uploadBtn.textContent = context.caseRow.status === "sent" ? "✓ Gönderildi" : "Drive'a yükle";
+  }
+}
+
+function setSendStatus(message, type = "") {
+  const statusEl = el("planning-send-status");
+  if (!statusEl) return;
+  if (!message) {
+    statusEl.textContent = "";
+    statusEl.className = "planning-send-status hidden";
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.className = `planning-send-status ${type === "ok" ? "is-ok" : type === "err" ? "is-err" : ""}`;
+}
+
+async function copySendSummary() {
+  const summary = buildCaseSummary(getSummaryInput());
+  if (!summary) return;
+  try {
+    await writeText(summary);
+    setSendStatus("Özet panoya kopyalandı.", "ok");
+  } catch (err) {
+    setSendStatus(`Kopyalanamadı: ${err}`, "err");
+  }
+}
+
+function emailSendSummary() {
+  if (!context) return;
+  const summary = buildCaseSummary(getSummaryInput());
+  window.location.href = buildMailtoLink(summary, context.caseRow);
+  setSendStatus("E-posta uygulamanız açılıyor…", "ok");
+}
+
+async function uploadCaseToDrive() {
+  if (!context || context.caseRow.status === "sent") return;
+
+  const scans = context.scanSession?.scans || {};
+  const filePaths = ["upper", "lower", "bite"].map((t) => scans[t]?.path).filter(Boolean);
+  if (!filePaths.length) {
+    alert("Bu vakaya bağlı ölçü dosyası yok.");
+    return;
+  }
+
+  if (!getSettings().drive_connected) {
+    alert("Google Drive bağlı değil. Ayarlar → Gönderim sekmesinden bağlanın.");
+    return;
+  }
+
+  await savePlanning();
+
+  const uploadBtn = el("btn-planning-upload");
+  if (uploadBtn) {
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = "⏳ Yükleniyor…";
+  }
+  setSendStatus("ZIP oluşturuluyor ve Drive'a yükleniyor…");
+
+  try {
+    const summary = buildCaseSummary(getSummaryInput());
+    const link = await invoke("compress_and_upload", {
+      filePaths,
+      patientName: buildUploadPatientName(context.caseRow, context.patient),
+      notes: summary,
+      alignment: null,
+    });
+
+    await writeText(link);
+    const updated = await updateCaseStatus(context.caseRow.id, "sent");
+    context.caseRow = updated;
+    dirty = false;
+    renderHeader(updated, context.patient);
+    renderSendSummary();
+    setSendStatus("✅ Drive'a yüklendi. İndirme linki panoya kopyalandı.", "ok");
+    await onDataChange?.();
+  } catch (err) {
+    setSendStatus(`❌ ${err}`, "err");
+    renderSendSummary();
+  }
 }
 
 function updatePlanningViewerToggles() {
@@ -282,6 +453,7 @@ function initDentalChart() {
     treatments: getDentalTreatments(),
     onChange: () => {
       dirty = true;
+      renderSendSummary();
     },
   });
 }
@@ -301,6 +473,8 @@ export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChan
 
   initDentalChart();
 
+  initShadeSelectors();
+
   el("btn-planning-back")?.addEventListener("click", () => closePlanning());
   el("btn-planning-save")?.addEventListener("click", () => savePlanning());
   el("btn-planning-ready")?.addEventListener("click", () => markReadyToSend());
@@ -312,7 +486,22 @@ export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChan
 
   el("planning-lab-notes")?.addEventListener("input", () => {
     dirty = true;
+    renderSendSummary();
   });
+
+  el("planning-shade-tab-classical")?.addEventListener("click", () => switchShadeTab(VITA_CLASSICAL.id));
+  el("planning-shade-tab-3d")?.addEventListener("click", () => switchShadeTab(VITA_3D_MASTER.id));
+
+  el("planning-tooth-shade-classical")?.addEventListener("change", () =>
+    onShadeChange(VITA_CLASSICAL.id)
+  );
+  el("planning-tooth-shade-3d")?.addEventListener("change", () =>
+    onShadeChange(VITA_3D_MASTER.id)
+  );
+
+  el("btn-planning-copy-summary")?.addEventListener("click", () => copySendSummary());
+  el("btn-planning-email")?.addEventListener("click", () => emailSendSummary());
+  el("btn-planning-upload")?.addEventListener("click", () => uploadCaseToDrive());
 
   for (const type of SCAN_TYPES) {
     el(`planning-toggle-${type}`)?.addEventListener("click", () => togglePlanningScan(type));
@@ -350,12 +539,15 @@ export async function openPlanning(patient, scanSession) {
   const notesInput = el("planning-lab-notes");
   if (notesInput) notesInput.value = caseRow.lab_notes || "";
 
+  setToothShade(caseRow.tooth_shade || "");
+
   loadDentalPlan(caseRow.dental_plan || "{}");
 
   renderHeader(caseRow, patient);
   renderScanList(scanSession);
   await loadPlanningScans(scanSession);
   loadAnnotations(caseRow.annotations || "{}");
+  renderSendSummary();
 
   el("new-scan-banner")?.classList.add("hidden");
   el("main-layout")?.classList.add("hidden");
@@ -372,6 +564,7 @@ export function closePlanning() {
   clearPlanningViewer();
   context = null;
   dirty = false;
+  setSendStatus("");
   onClose?.();
 }
 
@@ -396,6 +589,7 @@ async function detachFromCase(filePath) {
     context.scanSession.files = (context.scanSession.files || []).filter((f) => f.path !== filePath);
     renderScanList(context.scanSession);
     renderHeader(refreshed, context.patient);
+    renderSendSummary();
     await loadPlanningScans(context.scanSession);
   } catch (err) {
     alert(`Kaldırılamadı: ${err}`);
@@ -405,14 +599,22 @@ async function detachFromCase(filePath) {
 async function savePlanning() {
   if (!context) return null;
   const notes = el("planning-lab-notes")?.value?.trim() ?? "";
+  const toothShade = getToothShade();
   const dentalPlan = serializeDentalPlan(dentalChart?.getPlan() || emptyPlan());
   const annotations = serializeAnnotations(annotationLayer?.getAnnotations() || {});
 
   try {
-    const updated = await updateCasePlanning(context.caseRow.id, notes, dentalPlan, annotations);
+    const updated = await updateCasePlanning(
+      context.caseRow.id,
+      notes,
+      toothShade,
+      dentalPlan,
+      annotations
+    );
     context.caseRow = updated;
     dirty = false;
     renderHeader(updated, context.patient);
+    renderSendSummary();
     return updated;
   } catch (err) {
     alert(`Kaydedilemedi: ${err}`);

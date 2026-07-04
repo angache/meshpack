@@ -65,7 +65,7 @@ Giriş yolları:
 | 2.4a | Protez kataloğu (config) | ✅ | Ayarlar → Planlama sekmesi; `config.json`’da saklanır |
 | 2.5 | Ölçü görseli üzerine işaretleme / not | ✅ MVP | Planlama 3B viewer; vakaya `annotations` JSON |
 | 2.6 | Planlama tamamlanınca “Gönderime hazır” | ✅ Kısmen | Planlama sayfası butonu → `ready_to_send` |
-| 2.7 | Gönderim önizleme özeti | 🔲 | Planlama sayfası alt bölümü veya son adım |
+| 2.7 | Gönderim önizleme özeti | ✅ MVP | Planlama alt bölüm; kopyala / e-posta / Drive |
 | 2.8 | Eski ölçüler için vaka backfill | ✅ Var | Uygulama açılışında `case_id` boş kayıtlar |
 
 ---
@@ -183,7 +183,7 @@ Hasta zaten açık vakası varken yeni grup düşerse:
 4. Planlama sayfası kabuğu (vaka bağlamı + lab notu → cases.lab_notes) ✅
 5. Dental chart MVP (FDI) — planlama sayfasında ✅
 6. 3B annotation ✅
-7. Gönderim özeti + Drive/E-posta (vaka bazlı)
+7. Gönderim özeti + Drive/E-posta (vaka bazlı) ✅
 8. CasePackage spec → MeshPack-Lab (vizyon)
 ```
 
