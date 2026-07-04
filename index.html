@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MeshPack — Diş Tarama Yöneticisi</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="bg-anthracite-950 text-gray-100 overflow-hidden select-none h-screen w-screen">
+    <div id="app" class="w-full h-full flex flex-col">
+      <!-- Üst bar -->
+      <header class="flex items-center justify-between px-4 py-2 bg-anthracite-900 border-b border-anthracite-600 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-medical-accent/20 flex items-center justify-center text-lg">🦷</div>
+          <span class="font-semibold text-sm tracking-wide">MeshPack</span>
+          <span
+            id="status-badge"
+            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-anthracite-700 text-gray-400"
+          >
+            <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            <span id="status-text">İzleme Bekleniyor</span>
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-maximize" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Tam ekran (F11)">⛶</button>
+          <button id="btn-settings" class="text-xs text-gray-400 hover:text-white px-3 py-1 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Ayarlar">⚙️ Ayarlar</button>
+        </div>
+      </header>
+
+      <!-- Yeni ölçü bildirimi -->
+      <div id="new-scan-banner" class="hidden shrink-0 px-4 py-2 bg-medical-green/15 border-b border-medical-green/30 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2 h-2 rounded-full bg-medical-green animate-pulse shrink-0"></span>
+          <span id="new-scan-banner-text" class="text-xs text-medical-green font-medium truncate">Yeni ölçü algılandı</span>
+        </div>
+        <button id="btn-goto-new-scan" type="button" class="shrink-0 text-[10px] px-2.5 py-1 rounded bg-medical-green/20 text-medical-green border border-medical-green/40 hover:bg-medical-green/30 transition-colors">
+          Görüntüle →
+        </button>
+      </div>
+
+      <main class="flex flex-1 min-h-0">
+        <!-- SOL: Hasta listesi + form (ana alan) -->
+        <section class="flex-1 flex flex-col min-w-0 bg-anthracite-900">
+          <div id="file-browser-root" class="flex-1 min-h-0 flex flex-col px-4 pt-3"></div>
+
+          <div class="shrink-0 border-t border-anthracite-600 px-4 py-3 space-y-3 bg-anthracite-900/95">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="patient-name" class="block text-[10px] font-medium text-gray-400 mb-1">Hasta Adı</label>
+                <input id="patient-name" type="text" placeholder="Otomatik doldurulur"
+                  class="w-full px-2.5 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-medical-accent transition-colors" />
+              </div>
+              <div>
+                <label for="lab-notes" class="block text-[10px] font-medium text-gray-400 mb-1">Laboratuvar Notu</label>
+                <input id="lab-notes" type="text" placeholder="Kısa not..."
+                  class="w-full px-2.5 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-medical-accent transition-colors" />
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">
+              <button data-template="Zirkonyum Kron" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ Zirkonyum</button>
+              <button data-template="E-Max İnley" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ E-Max</button>
+              <button data-template="A1 Rengi" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ A1</button>
+              <button data-template="Kapanış Kontrol" class="template-btn px-2 py-1 rounded text-[10px] font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 text-gray-300 transition-colors">+ Kapanış</button>
+            </div>
+
+            <button id="btn-upload" disabled
+              class="w-full py-2.5 rounded-xl text-xs font-semibold bg-medical-green/20 text-medical-green border border-medical-green/40 hover:bg-medical-green/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+              🚀 Sıkıştır ve Drive'a Yükle
+            </button>
+            <p id="upload-status" class="text-[10px] text-center text-gray-500 hidden"></p>
+          </div>
+        </section>
+
+        <!-- SAĞ: Kompakt önizleme -->
+        <aside id="preview-panel" class="preview-panel w-72 shrink-0 flex flex-col border-l border-anthracite-600 bg-anthracite-900">
+          <div class="px-3 py-2 flex items-center justify-between border-b border-anthracite-700 shrink-0">
+            <span class="text-[10px] font-medium text-gray-400">Önizleme <span class="text-gray-600">· çift tıkla</span></span>
+            <button id="btn-expand-preview" type="button" class="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded border border-anthracite-600 hover:border-anthracite-500 transition-colors" title="Büyüt">⛶</button>
+          </div>
+
+          <div class="px-2 py-2 flex gap-1 shrink-0">
+            <button type="button" id="slot-upper" data-scan-type="upper"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              title="Üst çene">
+              <div class="text-[9px] text-gray-500">Üst</div>
+              <div class="slot-status text-[10px] text-gray-600">—</div>
+            </button>
+            <button type="button" id="slot-lower" data-scan-type="lower"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              title="Alt çene">
+              <div class="text-[9px] text-gray-500">Alt</div>
+              <div class="slot-status text-[10px] text-gray-600">—</div>
+            </button>
+            <button type="button" id="slot-bite" data-scan-type="bite"
+              class="scan-slot flex-1 px-1 py-1 rounded border border-dashed border-anthracite-600 text-center cursor-pointer transition-colors disabled:cursor-default"
+              title="Kapanış">
+              <div class="text-[9px] text-gray-500">Kap.</div>
+              <div class="slot-status text-[10px] text-gray-600">—</div>
+            </button>
+          </div>
+
+          <div id="viewer-slot" class="mx-2 mb-2 shrink-0">
+            <div id="viewer-container" class="viewer-compact relative rounded-lg overflow-hidden bg-anthracite-950 border border-anthracite-700">
+            <canvas id="mesh-canvas" class="w-full h-full"></canvas>
+            <div id="viewer-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-[10px] p-2 text-center pointer-events-none">
+              <span class="text-xl mb-1 opacity-40">📐</span>
+              <span>Hasta seçin</span>
+              <span class="text-[9px] mt-1 text-gray-600">Büyütmek için çift tıklayın</span>
+            </div>
+            </div>
+          </div>
+
+          <div class="px-2 pb-2 space-y-1.5 shrink-0 mt-auto">
+            <button id="btn-align" disabled
+              class="w-full px-2 py-1.5 rounded-lg text-[10px] font-medium bg-anthracite-700 text-gray-500 border border-anthracite-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              🔗 Hizala
+            </button>
+            <div id="file-info-bar" class="px-2 py-1 rounded bg-anthracite-800 border border-anthracite-700 text-[9px] text-gray-500 truncate">
+              Henüz dosya yok
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <!-- Büyük önizleme overlay -->
+    <div id="preview-overlay" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+      <div class="w-full max-w-5xl h-full max-h-[92vh] flex flex-col rounded-xl bg-anthracite-900 border border-anthracite-600 overflow-hidden shadow-2xl">
+        <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-anthracite-700 shrink-0">
+          <span class="text-sm font-medium text-gray-300 shrink-0">3B Önizleme</span>
+          <div class="flex items-center gap-1.5 flex-1 justify-center">
+            <button type="button" id="overlay-slot-upper" data-scan-type="upper"
+              class="overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-anthracite-600 text-gray-400 transition-colors disabled:opacity-30"
+              title="Üst çene göster/gizle">Üst Çene</button>
+            <button type="button" id="overlay-slot-lower" data-scan-type="lower"
+              class="overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-anthracite-600 text-gray-400 transition-colors disabled:opacity-30"
+              title="Alt çene göster/gizle">Alt Çene</button>
+            <button type="button" id="overlay-slot-bite" data-scan-type="bite"
+              class="overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-anthracite-600 text-gray-400 transition-colors disabled:opacity-30"
+              title="Kapanış göster/gizle">Kapanış</button>
+          </div>
+          <button id="btn-close-preview" type="button" class="shrink-0 text-xs text-gray-400 hover:text-white px-2 py-1 rounded border border-anthracite-600">✕ Kapat</button>
+        </div>
+        <div id="viewer-overlay-host" class="flex-1 min-h-0 relative bg-[#1a2030]"></div>
+      </div>
+    </div>
+
+    <!-- Ayarlar Modal -->
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div class="w-[480px] rounded-xl bg-anthracite-900 border border-anthracite-600 shadow-2xl p-6">
+        <h2 class="text-lg font-semibold mb-4">Ayarlar</h2>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-gray-300 mb-1.5">İzleme Klasörü</label>
+          <div class="flex gap-2">
+            <input id="watch-folder" type="text" readonly placeholder="Klasör seçilmedi"
+              class="flex-1 px-3 py-2 rounded-lg bg-anthracite-800 border border-anthracite-600 text-sm text-gray-300" />
+            <button id="btn-pick-folder" class="px-4 py-2 rounded-lg text-xs font-medium bg-medical-accent/20 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/30 transition-colors">Seç</button>
+          </div>
+        </div>
+        <div class="mb-6">
+          <label class="block text-xs font-medium text-gray-300 mb-1.5">Google Drive</label>
+          <button id="btn-drive-auth" class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-anthracite-700 hover:bg-anthracite-600 border border-anthracite-600 transition-colors">Google Drive'a Bağlan</button>
+          <p id="drive-status" class="text-xs text-gray-500 mt-1.5">Bağlı değil</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button id="btn-settings-close" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">Kapat</button>
+          <button id="btn-settings-save" class="px-4 py-2 rounded-lg text-sm font-medium bg-medical-accent text-white hover:bg-medical-accent/80 transition-colors">Kaydet ve Başlat</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
