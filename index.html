@@ -39,21 +39,28 @@
       </div>
 
       <main id="main-layout" class="flex flex-1 min-h-0">
-        <!-- SOL: Hasta listesi + form (ana alan) -->
-        <section class="mp-panel flex-1 flex flex-col min-w-0">
-          <div id="file-browser-root" class="flex-1 min-h-0 flex flex-col px-4 pt-3"></div>
+        <!-- SOL: Hasta listesi (tablo) -->
+        <section id="patient-list-panel" class="mp-panel patient-list-panel w-[32rem] shrink-0 flex flex-col min-h-0 mp-border-r">
+          <div id="file-browser-root" class="flex-1 min-h-0 flex flex-col px-3 pt-3"></div>
+        </section>
 
-          <div class="mp-footer-bar shrink-0 px-4 py-3 space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="patient-name" class="mp-label block text-[10px] font-medium mb-1">Hasta Adı</label>
-                <input id="patient-name" type="text" placeholder="Otomatik doldurulur"
-                  class="mp-input w-full px-2.5 py-2 rounded-lg text-xs" />
+        <!-- ORTA: Hasta detayı + gönderim formu -->
+        <section id="patient-detail-panel" class="mp-panel flex-1 flex flex-col min-w-0 min-h-0">
+          <div id="patient-detail-root" class="flex-1 min-h-0 overflow-hidden flex flex-col"></div>
+
+          <div class="mp-footer-bar shrink-0 px-4 py-4 space-y-4">
+            <div class="grid grid-cols-2 gap-x-6 gap-y-1">
+              <div class="mp-field">
+                <label for="patient-name" class="mp-field-label">Hasta adı <span class="mp-text-faint">(gönderimde kullanılır)</span></label>
+                <input id="patient-name" type="text" placeholder=" " autocomplete="off"
+                  class="mp-field-input" />
+                <div class="mp-field-line"></div>
               </div>
-              <div>
-                <label for="lab-notes" class="mp-label block text-[10px] font-medium mb-1">Laboratuvar Notu</label>
-                <input id="lab-notes" type="text" placeholder="Kısa not..."
-                  class="mp-input w-full px-2.5 py-2 rounded-lg text-xs" />
+              <div class="mp-field">
+                <label for="lab-notes" class="mp-field-label">Laboratuvar notu <span class="mp-text-faint">(geçici — Planla sayfasına taşındı)</span></label>
+                <input id="lab-notes" type="text" placeholder=" " autocomplete="off"
+                  class="mp-field-input" />
+                <div class="mp-field-line"></div>
               </div>
             </div>
 
@@ -72,11 +79,14 @@
           </div>
         </section>
 
-        <!-- SAĞ: Kompakt önizleme -->
-        <aside id="preview-panel" class="preview-panel mp-panel mp-panel-side w-[36rem] shrink-0 flex flex-col">
-          <div class="px-3 py-2 flex items-center justify-between mp-border-b shrink-0">
-            <span class="text-[10px] font-medium mp-text-muted">Önizleme <span class="mp-text-faint">· çift tıkla</span></span>
-            <button id="btn-expand-preview" type="button" class="mp-btn-ghost text-[10px] px-1.5 py-0.5 rounded" title="Büyüt">⛶</button>
+        <!-- SAĞ: Vaka önizlemesi -->
+        <aside id="preview-panel" class="preview-panel mp-panel mp-panel-side w-[36rem] shrink-0 flex flex-col min-h-0">
+          <div class="px-3 py-2 mp-border-b shrink-0">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[10px] font-medium mp-text-muted">Vaka önizlemesi <span class="mp-text-faint">· çift tıkla</span></span>
+              <button id="btn-expand-preview" type="button" class="mp-btn-ghost text-[10px] px-1.5 py-0.5 rounded shrink-0" title="Büyüt">⛶</button>
+            </div>
+            <div id="case-preview-meta" class="case-preview-meta mt-1.5 min-h-[1.125rem]"></div>
           </div>
 
           <div class="px-2 py-2 flex gap-1 shrink-0">
@@ -105,13 +115,15 @@
             <canvas id="mesh-canvas" class="w-full h-full"></canvas>
             <div id="viewer-placeholder" class="absolute inset-0 flex flex-col items-center justify-center mp-text-faint text-[10px] p-2 text-center pointer-events-none">
               <span class="text-xl mb-1 opacity-40">📐</span>
-              <span>Hasta seçin</span>
+              <span>Vaka seçin</span>
               <span class="text-[9px] mt-1 opacity-70">Büyütmek için çift tıklayın</span>
             </div>
             </div>
           </div>
 
-          <div class="px-2 pb-2 space-y-1.5 shrink-0 mt-auto">
+          <div id="case-preview-files" class="case-preview-files flex-1 min-h-0 overflow-y-auto mx-2 mb-2 px-1"></div>
+
+          <div class="px-2 pb-2 space-y-1.5 shrink-0">
             <button id="btn-align" disabled
               class="mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               title="Tarayıcı hizası otomatik kullanılır">
@@ -123,6 +135,59 @@
           </div>
         </aside>
       </main>
+
+      <!-- Planlama sayfası (vaka bazlı iş emri) -->
+      <div id="planning-view" class="hidden flex flex-1 min-h-0 flex-col">
+        <div class="planning-toolbar flex items-center gap-3 px-4 py-2.5 mp-border-b shrink-0">
+          <button id="btn-planning-back" type="button" class="mp-btn-ghost text-xs px-2.5 py-1.5 rounded-lg shrink-0">← Inbox</button>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="planning-case-number" class="text-sm font-semibold mp-text-title font-mono"></span>
+              <span id="planning-status-pill" class="case-status-pill case-status-linked"></span>
+            </div>
+            <p id="planning-subtitle" class="text-[11px] mp-text-muted truncate mt-0.5"></p>
+          </div>
+          <button id="btn-planning-ready" type="button" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg shrink-0">Gönderime hazır</button>
+          <button id="btn-planning-save" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg shrink-0">Kaydet</button>
+        </div>
+
+        <div class="flex flex-1 min-h-0">
+          <section class="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+            <div>
+              <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Laboratuvar notu</h2>
+              <p class="text-[10px] mp-text-faint mb-2">Bu not yalnızca bu vakaya kaydedilir ve gönderimde kullanılır.</p>
+              <textarea id="planning-lab-notes" rows="6" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[8rem]"
+                placeholder="İş emri detayları, materyal, renk, özel talimatlar…"></textarea>
+            </div>
+
+            <div>
+              <div id="dental-chart-root" class="fdi-chart-root"></div>
+            </div>
+          </section>
+
+          <aside class="planning-aside w-[28rem] shrink-0 mp-border-l flex flex-col min-h-0 overflow-y-auto p-4 space-y-3">
+            <div>
+              <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Ölçü önizleme</h2>
+              <div id="planning-viewer-container" class="planning-viewer relative rounded-lg overflow-hidden border">
+                <canvas id="planning-mesh-canvas" class="w-full h-full"></canvas>
+                <div id="planning-viewer-placeholder" class="absolute inset-0 flex flex-col items-center justify-center mp-text-faint text-[10px] p-2 text-center pointer-events-none">
+                  <span class="text-xl mb-1 opacity-40">📐</span>
+                  <span>Bu vakaya bağlı ölçü yok</span>
+                </div>
+              </div>
+              <div class="planning-viewer-toggles mt-2">
+                <button type="button" id="planning-toggle-upper" class="planning-viewer-toggle is-off" data-scan-type="upper" disabled>Üst</button>
+                <button type="button" id="planning-toggle-lower" class="planning-viewer-toggle is-off" data-scan-type="lower" disabled>Alt</button>
+                <button type="button" id="planning-toggle-bite" class="planning-viewer-toggle is-off" data-scan-type="bite" disabled>Kapanış</button>
+              </div>
+            </div>
+            <div>
+              <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide mb-2">Ölçü seti</h2>
+              <div id="planning-scan-list" class="space-y-2"></div>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
 
     <!-- Büyük önizleme overlay -->
@@ -147,6 +212,43 @@
       </div>
     </div>
 
+    <!-- Aynı gün vaka sorusu -->
+    <div id="same-day-case-modal" class="mp-overlay hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="mp-modal w-full max-w-md rounded-xl overflow-hidden">
+        <div class="px-5 py-4 mp-border-b">
+          <h2 class="text-base font-semibold mp-text-title">Aynı gün ikinci ölçü</h2>
+        </div>
+        <div class="px-5 py-4">
+          <p id="same-day-case-text" class="text-sm mp-text-muted leading-relaxed"></p>
+        </div>
+        <div class="flex flex-wrap justify-end gap-2 px-5 py-3 mp-border-t">
+          <button id="btn-same-day-cancel" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg">İptal</button>
+          <button id="btn-same-day-new" type="button" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg">Yeni vaka</button>
+          <button id="btn-same-day-add" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg">Mevcut vakaya ekle</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Eşleştirmeyi düzelt -->
+    <div id="reassign-scan-modal" class="mp-overlay hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="mp-modal w-full max-w-md rounded-xl overflow-hidden">
+        <div class="px-5 py-4 mp-border-b">
+          <h2 id="audit-modal-title" class="text-base font-semibold mp-text-title">Eşleştirmeyi düzelt</h2>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+          <p id="reassign-scan-text" class="text-sm mp-text-muted leading-relaxed"></p>
+          <div class="mp-field">
+            <label class="mp-field-label" for="reassign-reason">Gerekçe</label>
+            <textarea id="reassign-reason" rows="3" class="mp-field-input resize-none" placeholder="Neden? (en az 3 karakter)"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 mp-border-t">
+          <button id="btn-reassign-cancel" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg">İptal</button>
+          <button id="btn-reassign-confirm" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg">Onayla</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Ayarlar Modal -->
     <div id="settings-modal" class="mp-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="mp-modal w-full max-w-[720px] max-h-[92vh] flex flex-col rounded-xl overflow-hidden">
@@ -162,6 +264,7 @@
             <button type="button" id="settings-tab-watch" class="settings-tab" data-i18n="tab_watch">İzleme</button>
             <button type="button" id="settings-tab-upload" class="settings-tab" data-i18n="tab_upload">Gönderim</button>
             <button type="button" id="settings-tab-preview" class="settings-tab" data-i18n="tab_preview">Önizleme</button>
+            <button type="button" id="settings-tab-planning" class="settings-tab" data-i18n="tab_planning">Planlama</button>
             <button type="button" id="settings-tab-alignment" class="settings-tab" data-i18n="tab_alignment">Hizalama</button>
             <button type="button" id="settings-tab-general" class="settings-tab" data-i18n="tab_general">Genel</button>
           </nav>
@@ -294,6 +397,19 @@
                   <option value="front" data-i18n="camera_front">Önden</option>
                   <option value="occlusal" data-i18n="camera_occlusal">Oklüzal</option>
                 </select>
+              </div>
+            </section>
+
+            <!-- Planlama -->
+            <section id="settings-panel-planning" class="settings-panel hidden space-y-4">
+              <div>
+                <label class="settings-label" for="setting-planning-preview-height" data-i18n="planning_preview_height">Planlama önizleme yüksekliği (px)</label>
+                <input id="setting-planning-preview-height" type="number" min="240" max="900" step="20" class="settings-input" />
+                <p class="text-[10px] mp-text-faint mt-1">Planlama sayfasındaki 3B ölçü alanı. Hekimler için daha büyük değer önerilir.</p>
+              </div>
+              <div>
+                <h3 class="settings-label mb-2" data-i18n="dental_treatments">Protez tipleri (chart paleti)</h3>
+                <div id="dental-treatments-editor"></div>
               </div>
             </section>
 

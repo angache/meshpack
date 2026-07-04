@@ -4,6 +4,26 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+pub struct DentalTreatment {
+    pub id: String,
+    pub label: String,
+    pub abbr: String,
+    pub color: Option<String>,
+}
+
+impl Default for DentalTreatment {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            abbr: String::new(),
+            color: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub watch_folder: Option<String>,
     pub drive_connected: bool,
@@ -43,6 +63,10 @@ pub struct AppConfig {
     // Hizalama
     pub lower_jaw_offset_mm: f64,
 
+    // Planlama
+    pub dental_treatments: Vec<DentalTreatment>,
+    pub planning_preview_height: u32,
+
     // Genel
     pub language: String,
     pub start_fullscreen: bool,
@@ -75,6 +99,8 @@ pub struct PublicConfig {
     pub color_bite: String,
     pub camera_preset: String,
     pub lower_jaw_offset_mm: f64,
+    pub dental_treatments: Vec<DentalTreatment>,
+    pub planning_preview_height: u32,
     pub language: String,
     pub start_fullscreen: bool,
     pub session_timeout_min: u32,
@@ -107,6 +133,8 @@ impl From<AppConfig> for PublicConfig {
             color_bite: config.color_bite,
             camera_preset: config.camera_preset,
             lower_jaw_offset_mm: config.lower_jaw_offset_mm,
+            dental_treatments: config.dental_treatments.clone(),
+            planning_preview_height: config.planning_preview_height,
             language: config.language,
             start_fullscreen: config.start_fullscreen,
             session_timeout_min: config.session_timeout_min,
@@ -146,6 +174,8 @@ impl Default for AppConfig {
             color_bite: "#d45c5c".to_string(),
             camera_preset: "default".to_string(),
             lower_jaw_offset_mm: 0.0,
+            dental_treatments: Vec::new(),
+            planning_preview_height: 480,
             language: "tr".to_string(),
             start_fullscreen: false,
             session_timeout_min: 15,
@@ -208,6 +238,8 @@ impl AppConfig {
         self.color_bite = patch.color_bite;
         self.camera_preset = patch.camera_preset;
         self.lower_jaw_offset_mm = patch.lower_jaw_offset_mm;
+        self.dental_treatments = patch.dental_treatments;
+        self.planning_preview_height = patch.planning_preview_height.clamp(240, 900);
         self.language = patch.language;
         self.start_fullscreen = patch.start_fullscreen;
         self.session_timeout_min = patch.session_timeout_min.max(1);

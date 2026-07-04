@@ -1,14 +1,15 @@
-import { classifyScanType, parsePatientName } from "./utils.js";
+import { classifyScanType, parsePatientName, patientKeyFromFilename } from "./utils.js";
 import { getSessionTimeoutMs } from "./settings.js";
 
 /**
  * Aktif tarama oturumunu yönetir.
- * Üst çene + alt çene + kapanış taramalarını hasta adına göre gruplar.
+ * Üst çene + alt çene + kapanış taramalarını dosya önekine göre gruplar.
  */
 export class ScanSession {
   constructor() {
     this.patientKey = null;
     this.patientName = "";
+    this.scanSessionId = null;
     this.scans = { upper: null, lower: null, bite: null };
     this.lastActivity = Date.now();
     this.aligned = false;
@@ -18,6 +19,7 @@ export class ScanSession {
   reset() {
     this.patientKey = null;
     this.patientName = "";
+    this.scanSessionId = null;
     this.scans = { upper: null, lower: null, bite: null };
     this.aligned = false;
     this.transforms = null;
@@ -36,22 +38,20 @@ export class ScanSession {
       this.reset();
     }
 
-    const patientName = parsePatientName(filename);
-    const patientKey = patientName.toLowerCase().replace(/\s+/g, "_");
+    const key = patientKeyFromFilename(filename);
     const scanType = classifyScanType(filename);
 
-    if (this.patientKey && this.patientKey !== patientKey) {
+    if (this.patientKey && this.patientKey !== key) {
       this.reset();
     }
 
-    this.patientKey = patientKey;
-    this.patientName = patientName;
+    this.patientKey = key;
+    this.patientName = parsePatientName(filename);
     this.lastActivity = Date.now();
 
     const scan = { path, filename, sizeBytes, type: scanType };
 
     if (scanType === "unknown") {
-      // Bilinmeyen dosyayı ilk boş slota ata
       const emptySlot = ["upper", "lower", "bite"].find((s) => !this.scans[s]);
       if (emptySlot) {
         const replaced = !!this.scans[emptySlot];

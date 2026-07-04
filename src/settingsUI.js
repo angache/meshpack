@@ -6,9 +6,14 @@ import {
   setSettings,
   settingsToPayload,
 } from "./settings.js";
+import {
+  mountDentalTreatmentsEditor,
+  validateTreatments,
+} from "./settingsDentalTreatmentsUI.js";
 
 let draft = null;
 let activeTab = "appearance";
+let dentalEditor = null;
 
 const TAB_IDS = [
   "appearance",
@@ -16,6 +21,7 @@ const TAB_IDS = [
   "watch",
   "upload",
   "preview",
+  "planning",
   "alignment",
   "general",
 ];
@@ -64,8 +70,18 @@ function fillForm() {
   setVal("setting-language", draft.language);
   setCheck("setting-start-fullscreen", draft.start_fullscreen);
   setVal("setting-session-timeout", draft.session_timeout_min);
+  setVal("setting-planning-preview-height", draft.planning_preview_height);
 
+  mountDentalEditor();
   toggleArchiveRow();
+}
+
+function mountDentalEditor() {
+  const root = $("dental-treatments-editor");
+  if (!root) return;
+  dentalEditor = mountDentalTreatmentsEditor(root, draft.dental_treatments, (list) => {
+    draft.dental_treatments = list;
+  });
 }
 
 function readForm() {
@@ -100,6 +116,8 @@ function readForm() {
     language: getVal("setting-language"),
     start_fullscreen: getCheck("setting-start-fullscreen"),
     session_timeout_min: Number(getVal("setting-session-timeout")) || 15,
+    dental_treatments: dentalEditor?.getTreatments() || draft.dental_treatments,
+    planning_preview_height: Number(getVal("setting-planning-preview-height")) || 480,
   };
 }
 
@@ -171,6 +189,12 @@ export function initSettingsUI({ onSave, onDriveAuth, onIcpAlign }) {
 
   $("btn-settings-save")?.addEventListener("click", async () => {
     const next = readForm();
+    const check = validateTreatments(next.dental_treatments);
+    if (!check.ok) {
+      alert(check.message);
+      switchTab("planning");
+      return;
+    }
     setSettings(next);
     applySettings(next);
     await onSave?.(settingsToPayload(next));

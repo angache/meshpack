@@ -9,9 +9,9 @@ import {
   classifyScanType,
   formatFileSize,
   parsePatientName,
-  patientKey,
   SCAN_LABELS,
 } from "./utils.js";
+import { patientDisplayName } from "./patients.js";
 import { identityTransformSet, matrixToArray } from "./alignment.js";
 import {
   applySettings,
@@ -23,6 +23,8 @@ import {
   settingsToPayload,
 } from "./settings.js";
 import { initSettingsUI, loadSettingsIntoForm, updateDriveStatus } from "./settingsUI.js";
+import { initCaseModals } from "./caseModals.js";
+import { initPlanningPage, openPlanning } from "./planningPage.js";
 import { t } from "./i18n.js";
 
 const statusBadge = document.getElementById("status-badge");
@@ -64,9 +66,8 @@ function applyViewerSettings() {
 }
 
 /** Yeni ölçü takibi — gönderimden sonra temizlenir */
-const newPatientKeys = new Set();
 const newFilePaths = new Set();
-let lastNewScan = null; // { key, patientName, filename, scanType }
+let lastNewScan = null; // { path, filename, suggestedName, scanType }
 
 const newScanBanner = document.getElementById("new-scan-banner");
 const newScanBannerText = document.getElementById("new-scan-banner-text");
@@ -81,29 +82,39 @@ function initViewer() {
 
 function initFileBrowser() {
   fileBrowser = new FileBrowser({
-    container: document.getElementById("file-browser-root"),
-    onPatientSelect: (patient) => selectPatient(patient),
+    listContainer: document.getElementById("file-browser-root"),
+    detailContainer: document.getElementById("patient-detail-root"),
+    onPatientSelect: (patient, scanSession) => selectPatient(patient, scanSession),
+    onSessionSelect: (patient, scanSession) => selectPatient(patient, scanSession),
+    onPatientUpdated: (patient) => syncPatientToForm(patient),
+    onOpenPlanning: (patient, scanSession) => openPlanning(patient, scanSession),
     onToggleScan: (type) => toggleScanVisibility(type),
     getSessionPaths: () => session.getAllScans().map((s) => s.path),
     getSessionPatientKey: () => session.patientKey,
     isScanVisible: (type) => visibility[type],
-    getNewPatientKeys: () => newPatientKeys,
     getNewFilePaths: () => newFilePaths,
   });
 }
 
-function markNewScan({ path, filename, patientName, patientKey: key, scanType }) {
-  newPatientKeys.add(key);
+function syncPatientToForm(patient) {
+  if (!patient || session.patientKey !== patient.id) return;
+  const name = patientDisplayName(patient);
+  session.patientName = name;
+  patientNameInput.value = name;
+  if (patient.notes) labNotesInput.value = patient.notes;
+}
+
+function markNewScan({ path, filename, suggestedName, scanType }) {
   newFilePaths.add(path);
-  lastNewScan = { key, patientName, filename, scanType };
+  lastNewScan = { path, filename, suggestedName, scanType };
   updateNewScanBanner();
   setStatus("active", "🟢 Yeni ölçü algılandı");
   fileBrowser?.render();
 }
 
-function clearNewForPatient(key) {
-  newPatientKeys.delete(key);
-  if (lastNewScan?.key === key) {
+function clearNewForPaths(paths) {
+  for (const p of paths) newFilePaths.delete(p);
+  if (lastNewScan && paths.includes(lastNewScan.path)) {
     lastNewScan = null;
     updateNewScanBanner();
   }
@@ -111,7 +122,6 @@ function clearNewForPatient(key) {
 }
 
 function clearAllNewScans() {
-  newPatientKeys.clear();
   newFilePaths.clear();
   lastNewScan = null;
   updateNewScanBanner();
@@ -123,18 +133,16 @@ function updateNewScanBanner() {
     return;
   }
   const typeLabel = SCAN_LABELS[lastNewScan.scanType] || "Tarama";
-  newScanBannerText.textContent = `Yeni ölçü: ${lastNewScan.patientName} — ${typeLabel}`;
+  newScanBannerText.textContent = `Yeni ölçü: ${lastNewScan.suggestedName} — ${typeLabel} (eşleştirmeyi bekliyor)`;
   newScanBanner.classList.remove("hidden");
 }
 
 async function gotoNewScan() {
-  if (!lastNewScan) return;
-  await fileBrowser?.refresh();
-  const patient = fileBrowser?.patients.find((p) => p.key === lastNewScan.key);
-  if (patient) {
-    fileBrowser.openPatient(patient);
-    await selectPatient(patient);
-  }
+  if (!lastNewScan || !fileBrowser) return;
+  await fileBrowser.refresh();
+  fileBrowser.highlightGroupForPath(lastNewScan.path);
+  fileBrowser.render();
+  fileBrowser.pendingGroupsEl?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function expandPreview() {
@@ -343,28 +351,43 @@ function updateFileInfoBar() {
 }
 
 /**
- * Hasta seçildiğinde: önceki veriyi temizle, tüm taramaları yükle.
- * Üst ve alt çene otomatik görünür; kapanış yüklü ama gizli.
+ * Hasta seçildiğinde: önceki veriyi temizle, seçili oturumun taramalarını yükle.
  */
-async function selectPatient(patient) {
-  if (session.patientKey && session.patientKey !== patient.key) {
+async function selectPatient(patient, scanSession = null) {
+  if (!patient) {
+    clearPatientData();
+    fileBrowser?.render();
+    return;
+  }
+
+  const activeSession = scanSession || fileBrowser?.getActiveScanSession();
+  const scans = activeSession?.scans || {};
+  const displayName = patientDisplayName(patient);
+
+  if (session.patientKey && session.patientKey !== patient.id) {
     clearPatientData();
   } else {
     viewer.clearAll();
     session.reset();
   }
 
-  session.patientKey = patient.key;
-  session.patientName = patient.patientName;
+  session.patientKey = patient.id;
+  session.patientName = displayName;
+  session.scanSessionId = activeSession?.id || null;
   session.lastActivity = Date.now();
-  patientNameInput.value = patient.patientName;
+  patientNameInput.value = displayName;
+  if (patient.notes) labNotesInput.value = patient.notes;
+
+  if (fileBrowser) {
+    fileBrowser.selectedSessionId = activeSession?.id || null;
+  }
 
   visibility = getDefaultVisibility();
   resetAlignButton();
 
   let loaded = 0;
   for (const type of SCAN_TYPES) {
-    const file = patient.scans[type];
+    const file = scans[type];
     if (!file) continue;
 
     session.scans[type] = {
@@ -395,69 +418,28 @@ async function selectPatient(patient) {
   setStatus("active", session.getStatusText());
   updateScanSlots();
   updateFileInfoBar();
+  fileBrowser?.render();
 }
 
 /** Klasör izleyiciden gelen tek dosya */
 async function addScanFromWatcher({ path, filename, size_bytes }) {
-  const name = parsePatientName(filename);
-  const key = patientKey(name);
-  let type = classifyScanType(filename);
+  const suggestedName = parsePatientName(filename);
+  const type = classifyScanType(filename);
 
   markNewScan({
     path,
     filename,
-    patientName: name,
-    patientKey: key,
+    suggestedName,
     scanType: type === "unknown" ? "upper" : type,
   });
 
-  if (session.patientKey && session.patientKey !== key) {
-    await fileBrowser?.refresh();
-    const patient = fileBrowser?.patients.find((p) => p.key === key);
-    if (patient) {
-      fileBrowser.openPatient(patient);
-      await selectPatient(patient);
-      return;
-    }
-    clearPatientData();
+  await fileBrowser?.refresh();
+
+  const link = fileBrowser?.scanLinks.get(path);
+  if (link && session.patientKey === link.patient_id) {
+    const patient = fileBrowser.patients.find((p) => p.id === link.patient_id);
+    if (patient) fileBrowser.openPatient(patient);
   }
-
-  if (!session.patientKey) {
-    session.patientKey = key;
-    session.patientName = name;
-    patientNameInput.value = name;
-    visibility = getDefaultVisibility();
-  }
-
-  if (type === "unknown") {
-    type = findEmptySlot();
-  }
-
-  session.scans[type] = { path, filename, sizeBytes: size_bytes, type };
-  session.aligned = false;
-  session.lastActivity = Date.now();
-
-  if (visibility[type] === undefined) {
-    visibility[type] = type !== "bite";
-  }
-
-  try {
-    await viewer.addScan(path, type);
-    viewer.setVisible(type, visibility[type]);
-    viewerPlaceholder.classList.add("hidden");
-    viewer._fitCamera();
-    acceptScannerAlignment();
-  } catch (err) {
-    console.warn("3B önizleme yüklenemedi:", err);
-  }
-
-  setStatus("active", session.getStatusText());
-  updateScanSlots();
-  updateFileInfoBar();
-}
-
-function findEmptySlot() {
-  return SCAN_TYPES.find((s) => !session.scans[s]) || "upper";
 }
 
 async function onScanDetected(event) {
@@ -589,11 +571,8 @@ async function performUpload() {
     await writeText(link);
     btnUpload.textContent = "✅ Yüklendi — Link Kopyalandı";
 
-    const uploadedKey = session.patientKey;
-    for (const s of session.getAllScans()) {
-      newFilePaths.delete(s.path);
-    }
-    if (uploadedKey) clearNewForPatient(uploadedKey);
+    const uploadedPaths = session.getAllScans().map((s) => s.path);
+    clearNewForPaths(uploadedPaths);
 
     clearPatientData();
     await fileBrowser?.refresh();
@@ -604,6 +583,10 @@ async function performUpload() {
     btnUpload.textContent = `🚀 ${t("upload_btn")}`;
   }
 }
+
+patientNameInput.addEventListener("change", () => {
+  session.patientName = patientNameInput.value.trim();
+});
 
 btnUpload.addEventListener("click", () => performUpload());
 
@@ -640,6 +623,16 @@ onSettingsChange(() => {
 
 async function init() {
   initViewer();
+  initCaseModals();
+  initPlanningPage({
+    onClose: async () => {
+      await fileBrowser?.refresh();
+      fileBrowser?.render();
+    },
+    onDataChange: async () => {
+      await fileBrowser?.refresh();
+    },
+  });
   initFileBrowser();
   applyViewerSettings();
   updateScanSlots();
@@ -651,8 +644,11 @@ async function init() {
     const merged = settingsFromConfig(config);
     loadSettingsIntoForm(merged);
     updateDriveStatus(merged.drive_connected);
+    await fileBrowser.refresh();
     if (merged.watch_folder) {
       await setupWatchFolder(merged.watch_folder);
+    } else {
+      fileBrowser.setWatchFolder(null);
     }
     if (merged.start_fullscreen) {
       await appWindow.setFullscreen(true);

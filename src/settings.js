@@ -1,4 +1,5 @@
 import { setLanguage, t } from "./i18n.js";
+import { cloneDefaultTreatments } from "./settingsDentalTreatmentsUI.js";
 
 export const DEFAULT_SETTINGS = {
   watch_folder: null,
@@ -25,6 +26,8 @@ export const DEFAULT_SETTINGS = {
   color_bite: "#d45c5c",
   camera_preset: "default",
   lower_jaw_offset_mm: 0,
+  dental_treatments: cloneDefaultTreatments(),
+  planning_preview_height: 480,
   language: "tr",
   start_fullscreen: false,
   session_timeout_min: 15,
@@ -73,15 +76,29 @@ export function applySettings(s = settings) {
     viewerContainer.style.height = `${s.preview_height}px`;
   }
 
+  const planningViewer = document.getElementById("planning-viewer-container");
+  if (planningViewer) {
+    planningViewer.style.height = `${s.planning_preview_height}px`;
+  }
+
   const main = document.getElementById("main-layout");
-  const listSection = main?.querySelector("section");
+  const listPanel = document.getElementById("patient-list-panel");
+  const detailPanel = document.getElementById("patient-detail-panel");
   const previewAside = document.getElementById("preview-panel");
-  if (main && listSection && previewAside) {
+  if (main && listPanel && detailPanel && previewAside) {
+    const panels = [listPanel, detailPanel, previewAside];
     if (s.layout_order === "preview-list") {
-      main.insertBefore(previewAside, listSection);
+      panels.sort((a, b) => {
+        const order = { [previewAside.id]: 0, [detailPanel.id]: 1, [listPanel.id]: 2 };
+        return order[a.id] - order[b.id];
+      });
     } else {
-      main.insertBefore(listSection, previewAside);
+      panels.sort((a, b) => {
+        const order = { [listPanel.id]: 0, [detailPanel.id]: 1, [previewAside.id]: 2 };
+        return order[a.id] - order[b.id];
+      });
     }
+    panels.forEach((panel) => main.appendChild(panel));
   }
 
   applyI18nToDom();
@@ -114,8 +131,19 @@ export function hexToNumber(hex) {
   return parseInt(hex.replace("#", ""), 16);
 }
 
+export function getDentalTreatments() {
+  const list = settings.dental_treatments;
+  if (Array.isArray(list) && list.length > 0) return list;
+  return cloneDefaultTreatments();
+}
+
 export function settingsFromConfig(config) {
-  return { ...DEFAULT_SETTINGS, ...config };
+  const merged = { ...DEFAULT_SETTINGS, ...config };
+  if (!Array.isArray(merged.dental_treatments) || merged.dental_treatments.length === 0) {
+    merged.dental_treatments = cloneDefaultTreatments();
+  }
+  merged.planning_preview_height = Number(merged.planning_preview_height) || DEFAULT_SETTINGS.planning_preview_height;
+  return merged;
 }
 
 export function settingsToPayload(s = settings) {
@@ -149,6 +177,15 @@ export function settingsToPayload(s = settings) {
     color_bite: s.color_bite,
     camera_preset: s.camera_preset,
     lower_jaw_offset_mm: Number(s.lower_jaw_offset_mm) || 0,
+    dental_treatments: Array.isArray(s.dental_treatments)
+      ? s.dental_treatments.map((t) => ({
+          id: String(t.id || "").trim(),
+          label: String(t.label || "").trim(),
+          abbr: String(t.abbr || "").trim().slice(0, 2),
+          color: t.color || null,
+        }))
+      : cloneDefaultTreatments(),
+    planning_preview_height: Math.min(900, Math.max(240, Number(s.planning_preview_height) || 480)),
     language: s.language,
     start_fullscreen: !!s.start_fullscreen,
     session_timeout_min: Number(s.session_timeout_min) || 15,
