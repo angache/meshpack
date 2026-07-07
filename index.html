@@ -13,6 +13,10 @@
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-medical-accent/20 flex items-center justify-center text-lg">🦷</div>
           <span class="font-semibold text-sm tracking-wide mp-text-title">MeshPack</span>
+          <button id="main-cloud-badge" type="button" class="mp-cloud-badge is-offline" title="MeshPack Cloud ayarlarını aç">
+            <span id="main-cloud-dot" class="mp-cloud-dot"></span>
+            <span id="main-cloud-text">Cloud bağlı değil</span>
+          </button>
           <span
             id="status-badge"
             class="status-badge-idle inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium"
@@ -22,6 +26,11 @@
           </span>
         </div>
         <div class="flex items-center gap-2">
+          <span id="header-user-label" class="hidden text-[10px] mp-text-muted px-2 py-0.5 rounded border mp-border"></span>
+          <button id="btn-header-messages" type="button" class="mp-btn-ghost text-xs px-3 py-1 rounded relative hidden" title="Mesajlar ve bildirimler">
+            💬 Mesajlar
+            <span id="header-messages-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full text-[9px] font-medium bg-medical-accent text-white flex items-center justify-center">0</span>
+          </button>
           <button id="btn-maximize" class="mp-btn-ghost text-xs px-2 py-1 rounded" title="Tam ekran (F11)">⛶</button>
           <button id="btn-settings" class="mp-btn-ghost text-xs px-3 py-1 rounded" title="Ayarlar">⚙️ Ayarlar</button>
         </div>
@@ -38,6 +47,64 @@
         </button>
       </div>
 
+      <!-- Bağlantı sonrası planlama önerisi -->
+      <div id="planning-prompt-banner" class="hidden shrink-0 px-4 py-2 bg-medical-accent/12 border-b border-medical-accent/30 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-sm shrink-0">📋</span>
+          <span id="planning-prompt-text" class="text-xs mp-text-secondary font-medium truncate">Ölçü bağlandı</span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btn-goto-planning" type="button" class="text-[10px] px-2.5 py-1 rounded bg-medical-accent/25 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/35 transition-colors font-semibold">
+            Planlamaya geç →
+          </button>
+          <button id="btn-dismiss-planning-prompt" type="button" class="mp-btn-ghost text-[10px] px-1.5 py-1 rounded mp-text-faint" title="Kapat">✕</button>
+        </div>
+      </div>
+
+      <!-- Mesajlar merkezi -->
+      <div id="messages-hub-view" class="hidden flex flex-1 min-h-0 flex-col">
+        <div class="messages-hub-toolbar shrink-0 flex items-center justify-between px-4 py-2 mp-border-b">
+          <div class="flex items-center gap-3">
+            <button id="btn-messages-hub-back" type="button" class="mp-btn-ghost text-xs px-2 py-1 rounded">← Ana ekran</button>
+            <h2 class="text-sm font-semibold mp-text-title m-0">Mesajlar</h2>
+            <span id="messages-hub-unread-total" class="hidden messages-hub-badge">0</span>
+          </div>
+          <button id="btn-messages-mark-all-read" type="button" class="mp-btn-ghost text-[10px] px-2 py-1 rounded">Tümünü okundu işaretle</button>
+        </div>
+        <div class="flex flex-1 min-h-0">
+          <aside id="messages-thread-panel" class="messages-hub-thread-panel w-80 shrink-0 flex flex-col min-h-0 mp-border-r">
+            <div class="p-3 mp-border-b">
+              <input id="messages-thread-search" type="search" class="mp-field-input text-xs w-full" placeholder="Vaka veya hasta ara…" />
+            </div>
+            <div id="messages-thread-list" class="flex-1 overflow-y-auto"></div>
+          </aside>
+          <main id="messages-chat-panel" class="flex-1 flex flex-col min-h-0 min-w-0">
+            <div id="messages-chat-empty" class="flex-1 flex items-center justify-center mp-text-muted text-sm">
+              Soldan bir konuşma seçin
+            </div>
+            <div id="messages-chat-active" class="hidden flex-1 flex flex-col min-h-0">
+              <div class="messages-hub-chat-header shrink-0 px-4 py-3 mp-border-b">
+                <div id="messages-chat-title" class="text-sm font-semibold mp-text-title"></div>
+                <div id="messages-chat-subtitle" class="text-[10px] mp-text-muted mt-0.5"></div>
+                <button id="btn-messages-open-case" type="button" class="mp-btn-secondary text-[10px] px-2 py-1 rounded mt-2">Vakayı planlamada aç</button>
+              </div>
+              <div id="messages-hub-list" class="messages-hub-messages-list flex-1 overflow-y-auto p-4"></div>
+              <div class="shrink-0 p-3 mp-border-t flex gap-2">
+                <textarea id="messages-hub-input" class="mp-field-input text-xs flex-1 min-h-[2.5rem] max-h-24 resize-y" placeholder="Laboratuvara mesaj yazın…" rows="2"></textarea>
+                <button id="btn-messages-hub-send" type="button" class="mp-btn-primary text-xs shrink-0 self-end px-3 py-2 rounded-lg">Gönder</button>
+              </div>
+            </div>
+          </main>
+          <aside id="messages-notifications-panel" class="messages-hub-notifications-panel w-72 shrink-0 flex flex-col min-h-0 mp-border-l">
+            <div class="p-3 mp-border-b flex items-center justify-between gap-2">
+              <span class="text-xs font-medium mp-text-title">Bildirimler</span>
+              <span id="messages-notifications-count" class="hidden messages-hub-badge">0</span>
+            </div>
+            <div id="messages-notifications-list" class="flex-1 overflow-y-auto p-2"></div>
+          </aside>
+        </div>
+      </div>
+
       <main id="main-layout" class="flex flex-1 min-h-0">
         <!-- SOL: Hasta listesi (tablo) -->
         <section id="patient-list-panel" class="mp-panel patient-list-panel w-[32rem] shrink-0 flex flex-col min-h-0 mp-border-r">
@@ -48,34 +115,11 @@
         <section id="patient-detail-panel" class="mp-panel flex-1 flex flex-col min-w-0 min-h-0">
           <div id="patient-detail-root" class="flex-1 min-h-0 overflow-hidden flex flex-col"></div>
 
-          <div class="mp-footer-bar shrink-0 px-4 py-4 space-y-4">
-            <div class="grid grid-cols-2 gap-x-6 gap-y-1">
-              <div class="mp-field">
-                <label for="patient-name" class="mp-field-label">Hasta adı <span class="mp-text-faint">(gönderimde kullanılır)</span></label>
-                <input id="patient-name" type="text" placeholder=" " autocomplete="off"
-                  class="mp-field-input" />
-                <div class="mp-field-line"></div>
-              </div>
-              <div class="mp-field">
-                <label for="lab-notes" class="mp-field-label">Laboratuvar notu <span class="mp-text-faint">(geçici — Planla sayfasına taşındı)</span></label>
-                <input id="lab-notes" type="text" placeholder=" " autocomplete="off"
-                  class="mp-field-input" />
-                <div class="mp-field-line"></div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap gap-1.5">
-              <button data-template="Zirkonyum Kron" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ Zirkonyum</button>
-              <button data-template="E-Max İnley" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ E-Max</button>
-              <button data-template="A1 Rengi" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ A1</button>
-              <button data-template="Kapanış Kontrol" class="template-btn px-2 py-1 rounded text-[10px] font-medium">+ Kapanış</button>
-            </div>
-
-            <button id="btn-upload" disabled
-              class="mp-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
-              🚀 Sıkıştır ve Drive'a Yükle
-            </button>
-            <p id="upload-status" class="text-[10px] text-center mp-text-faint hidden"></p>
+          <div class="mp-footer-bar shrink-0 px-4 py-3">
+            <p class="text-[10px] mp-text-muted text-center leading-relaxed m-0">
+              İş emri, diş planı ve Drive gönderimi <strong class="mp-text-secondary">Planla</strong> sayfasındadır.
+              Hasta detayı veya vaka önizlemesindeki <strong class="mp-text-secondary">Planla →</strong> ile geçin.
+            </p>
           </div>
         </section>
 
@@ -146,9 +190,15 @@
               <span id="planning-status-pill" class="case-status-pill case-status-linked"></span>
             </div>
             <p id="planning-subtitle" class="text-[11px] mp-text-muted truncate mt-0.5"></p>
+            <div id="planning-status-steps" class="mt-1.5"></div>
+            <p id="planning-sent-info" class="text-[10px] text-medical-green mt-1 hidden"></p>
           </div>
           <button id="btn-planning-ready" type="button" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg shrink-0">Gönderime hazır</button>
           <button id="btn-planning-save" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg shrink-0">Kaydet</button>
+          <span id="planning-save-toast" class="planning-save-toast hidden"></span>
+        </div>
+        <div id="planning-readonly-banner" class="planning-readonly-banner hidden shrink-0 px-4 py-2 text-xs mp-text-muted bg-amber-500/10 border-b border-amber-500/25">
+          Bu vaka gönderildi. Plan salt okunur — değişiklik için yeni ölçü/vaka gerekir.
         </div>
 
         <div class="flex flex-1 min-h-0">
@@ -158,6 +208,7 @@
               <p class="text-[10px] mp-text-faint mb-2">Materyal, talimat ve özel notlar.</p>
               <textarea id="planning-lab-notes" rows="5" class="planning-notes-input w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[6rem]"
                 placeholder="Zirkonyum, kapanış kontrolü, özel talimatlar…"></textarea>
+              <div id="planning-lab-templates" class="flex flex-wrap gap-1.5 mt-2"></div>
             </div>
 
             <div class="planning-shade-block">
@@ -178,15 +229,31 @@
             <div class="planning-send-section">
               <div class="flex items-center justify-between gap-2 mb-2">
                 <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide">Gönderim özeti</h2>
-                <span class="text-[10px] mp-text-faint">Lab / e-posta / Drive</span>
+                <span class="text-[10px] mp-text-faint">Lab / e-posta / Drive · CasePackage v1</span>
               </div>
               <pre id="planning-send-summary" class="planning-send-summary"></pre>
+              <div id="planning-readiness" class="planning-readiness hidden"></div>
               <div class="planning-send-actions">
                 <button type="button" id="btn-planning-copy-summary" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg">Özeti kopyala</button>
+                <button type="button" id="btn-planning-export-zip" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg">ZIP kaydet</button>
                 <button type="button" id="btn-planning-email" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg">E-posta</button>
+                <button type="button" id="btn-planning-cloud" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg hidden">Cloud</button>
                 <button type="button" id="btn-planning-upload" class="mp-btn-primary text-[10px] px-2.5 py-1.5 rounded-lg">Drive'a yükle</button>
               </div>
               <p id="planning-send-status" class="planning-send-status hidden"></p>
+            </div>
+
+            <div id="planning-lab-chat" class="planning-lab-chat hidden">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h2 class="text-xs font-semibold mp-text-muted uppercase tracking-wide">Laboratuvar mesajları</h2>
+                <button type="button" id="btn-planning-open-messages-hub" class="mp-btn-ghost text-[10px] px-2 py-0.5 rounded">Tüm mesajlar →</button>
+              </div>
+              <p id="planning-lab-chat-hint" class="planning-lab-chat-hint hidden"></p>
+              <div id="planning-lab-messages-list" class="planning-lab-messages-list"></div>
+              <div class="planning-lab-message-compose">
+                <input id="planning-lab-message-input" type="text" class="planning-notes-input text-xs flex-1 min-w-0" placeholder="Laboratuvara mesaj yazın…" />
+                <button type="button" id="btn-planning-lab-send-message" class="mp-btn-primary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Gönder</button>
+              </div>
             </div>
           </section>
 
@@ -305,10 +372,12 @@
             <button type="button" id="settings-tab-layout" class="settings-tab" data-i18n="tab_layout">Düzen</button>
             <button type="button" id="settings-tab-watch" class="settings-tab" data-i18n="tab_watch">İzleme</button>
             <button type="button" id="settings-tab-upload" class="settings-tab" data-i18n="tab_upload">Gönderim</button>
+            <button type="button" id="settings-tab-cloud" class="settings-tab" data-i18n="tab_cloud">MeshPack Cloud</button>
             <button type="button" id="settings-tab-preview" class="settings-tab" data-i18n="tab_preview">Önizleme</button>
             <button type="button" id="settings-tab-planning" class="settings-tab" data-i18n="tab_planning">Planlama</button>
             <button type="button" id="settings-tab-alignment" class="settings-tab" data-i18n="tab_alignment">Hizalama</button>
             <button type="button" id="settings-tab-general" class="settings-tab" data-i18n="tab_general">Genel</button>
+            <button type="button" id="settings-tab-audit" class="settings-tab" data-i18n="tab_activity_log">Günlük</button>
           </nav>
 
           <div class="settings-panels flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
@@ -416,10 +485,171 @@
                   <button id="btn-pick-archive" type="button" class="settings-btn-secondary shrink-0" data-i18n="pick_folder">Seç</button>
                 </div>
               </div>
-              <label class="settings-check">
-                <input id="setting-auto-upload" type="checkbox" />
-                <span data-i18n="auto_upload">3 tarama tamamlanınca otomatik gönder</span>
-              </label>
+              <div class="pt-3 mp-border-t space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 class="text-sm font-medium mp-text-title">Gönderim geçmişi</h3>
+                    <p class="text-[11px] mp-text-muted mt-0.5">Son gönderilen vakalar</p>
+                  </div>
+                  <button type="button" id="btn-send-history-refresh" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Yenile</button>
+                </div>
+                <div id="send-history-list" class="send-history-list"></div>
+              </div>
+            </section>
+
+            <!-- MeshPack Cloud (Supabase) -->
+            <section id="settings-panel-cloud" class="settings-panel hidden space-y-3">
+              <div>
+                <h3 class="text-sm font-medium mp-text-title" data-i18n="cloud_title">MeshPack Cloud</h3>
+                <p class="text-[11px] mp-text-muted mt-0.5" data-i18n="cloud_desc">Vaka senkronu, mesajlaşma ve bildirimler (Supabase).</p>
+              </div>
+              <p id="cloud-status" class="text-xs mp-text-muted">—</p>
+              <p id="cloud-auth-error" class="hidden text-[11px] px-2.5 py-2 rounded-lg border mb-2"></p>
+
+              <div id="cloud-auth-panel">
+                <div id="cloud-auth-tabs" class="patient-sort-toggle mb-3">
+                  <button type="button" data-cloud-auth-tab="login" class="patient-sort-btn is-active flex-1">Giriş</button>
+                  <button type="button" data-cloud-auth-tab="signup" class="patient-sort-btn flex-1">Kayıt ol</button>
+                </div>
+
+                <div id="cloud-auth-login" class="space-y-2">
+                  <div>
+                    <label class="settings-label" for="cloud-email">E-posta</label>
+                    <input id="cloud-email" type="email" class="settings-input" autocomplete="username" />
+                  </div>
+                  <div>
+                    <label class="settings-label" for="cloud-password">Şifre</label>
+                    <input id="cloud-password" type="password" class="settings-input" autocomplete="current-password" />
+                  </div>
+                  <button type="button" id="btn-cloud-sign-in" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg w-full">Giriş yap</button>
+                </div>
+
+                <div id="cloud-auth-signup" class="hidden space-y-2">
+                  <div>
+                    <label class="settings-label" for="cloud-signup-email">E-posta</label>
+                    <input id="cloud-signup-email" type="email" class="settings-input" />
+                  </div>
+                  <div>
+                    <label class="settings-label" for="cloud-signup-password">Şifre</label>
+                    <input id="cloud-signup-password" type="password" class="settings-input" minlength="6" />
+                  </div>
+                  <div>
+                    <label class="settings-label" for="cloud-signup-org-name">Klinik / Lab adı</label>
+                    <input id="cloud-signup-org-name" type="text" class="settings-input" placeholder="Örn: Tiniç Diş Kliniği" />
+                  </div>
+                  <div>
+                    <label class="settings-label" for="cloud-signup-org-type">Hesap türü</label>
+                    <select id="cloud-signup-org-type" class="settings-input">
+                      <option value="clinic">Klinik</option>
+                      <option value="lab">Laboratuvar</option>
+                    </select>
+                  </div>
+                  <button type="button" id="btn-cloud-sign-up" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg w-full">Hesap oluştur</button>
+                </div>
+              </div>
+
+              <div id="cloud-org-setup-panel" class="hidden space-y-2">
+                <p class="text-[11px] mp-text-muted">Organizasyonunuz henüz tanımlı değil. Bir kez oluşturun:</p>
+                <div>
+                  <label class="settings-label" for="cloud-setup-org-name">Klinik / Lab adı</label>
+                  <input id="cloud-setup-org-name" type="text" class="settings-input" />
+                </div>
+                <div>
+                  <label class="settings-label" for="cloud-setup-org-type">Hesap türü</label>
+                  <select id="cloud-setup-org-type" class="settings-input">
+                    <option value="clinic">Klinik</option>
+                    <option value="lab">Laboratuvar</option>
+                  </select>
+                </div>
+                <button type="button" id="btn-cloud-create-org" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg w-full">Organizasyon oluştur</button>
+              </div>
+
+              <div id="cloud-session-panel" class="hidden space-y-2">
+                <p id="cloud-org-info" class="text-xs mp-text-secondary"></p>
+
+                <!-- Klinik: lab yönetimi -->
+                <div id="cloud-clinic-labs-panel" class="hidden space-y-3">
+                  <div class="p-2.5 rounded-lg border mp-border space-y-2">
+                    <p class="text-[10px] mp-text-muted font-medium uppercase tracking-wide">Klinik eşleştirme kodunuz</p>
+                    <p class="text-[10px] mp-text-faint">Lab bu kodu girerek size bağlantı isteği gönderebilir.</p>
+                    <div class="flex items-center gap-2">
+                      <code id="cloud-clinic-pairing-code" class="text-sm font-mono text-medical-accent flex-1">—</code>
+                      <button type="button" id="btn-cloud-copy-clinic-code" class="mp-btn-secondary text-[10px] px-2 py-1 rounded">Kopyala</button>
+                    </div>
+                  </div>
+
+                  <div class="patient-sort-toggle">
+                    <button type="button" data-lab-link-tab="mine" class="patient-sort-btn is-active flex-1 text-[10px]">Laboratuvarlarım</button>
+                    <button type="button" data-lab-link-tab="search" class="patient-sort-btn flex-1 text-[10px]">Lab ara</button>
+                    <button type="button" data-lab-link-tab="code" class="patient-sort-btn flex-1 text-[10px]">Kod ile bağlan</button>
+                  </div>
+
+                  <div id="lab-link-tab-mine" class="space-y-2">
+                    <div id="cloud-incoming-requests" class="hidden space-y-1.5"></div>
+                    <div id="cloud-lab-links-list" class="cloud-lab-links-list space-y-1.5"></div>
+                    <p id="cloud-lab-links-empty" class="hidden text-[10px] mp-text-muted text-center py-3">Henüz bağlı laboratuvar yok.</p>
+                  </div>
+
+                  <div id="lab-link-tab-search" class="hidden space-y-2">
+                    <div class="flex gap-2">
+                      <input id="cloud-lab-search" type="text" class="settings-input flex-1 text-xs" placeholder="Laboratuvar adı ara…" />
+                      <button type="button" id="btn-cloud-lab-search" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Ara</button>
+                    </div>
+                    <div id="cloud-lab-search-results" class="cloud-lab-links-list space-y-1.5"></div>
+                  </div>
+
+                  <div id="lab-link-tab-code" class="hidden space-y-1.5 p-2.5 rounded-lg border mp-border">
+                    <p class="text-[10px] mp-text-muted">Lab kodunu biliyorsanız anında bağlanın (onay gerekmez):</p>
+                    <div class="flex gap-2">
+                      <input id="cloud-lab-link-code" type="text" class="settings-input flex-1 font-mono uppercase" placeholder="LAB KODU" />
+                      <button type="button" id="btn-cloud-link-lab" class="mp-btn-primary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Bağla</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Lab: klinik yönetimi (meshpack-lab ile paylaşımlı şema) -->
+                <div id="cloud-lab-clinics-panel" class="hidden space-y-3">
+                  <div id="cloud-lab-code-panel" class="space-y-1.5 p-2.5 rounded-lg border mp-border">
+                    <p class="text-[10px] mp-text-muted">Kliniğe vereceğiniz lab eşleştirme kodu:</p>
+                    <div class="flex items-center gap-2">
+                      <code id="cloud-lab-pairing-code" class="text-sm font-mono text-medical-accent flex-1">—</code>
+                      <button type="button" id="btn-cloud-copy-lab-code" class="mp-btn-secondary text-[10px] px-2 py-1 rounded">Kopyala</button>
+                    </div>
+                  </div>
+
+                  <div class="patient-sort-toggle">
+                    <button type="button" data-clinic-link-tab="mine" class="patient-sort-btn is-active flex-1 text-[10px]">Kliniklerim</button>
+                    <button type="button" data-clinic-link-tab="search" class="patient-sort-btn flex-1 text-[10px]">Klinik ara</button>
+                    <button type="button" data-clinic-link-tab="code" class="patient-sort-btn flex-1 text-[10px]">Kod ile istek</button>
+                  </div>
+
+                  <div id="clinic-link-tab-mine" class="space-y-2">
+                    <div id="cloud-incoming-clinic-requests" class="hidden space-y-1.5"></div>
+                    <div id="cloud-clinic-links-list" class="cloud-lab-links-list space-y-1.5"></div>
+                  </div>
+
+                  <div id="clinic-link-tab-search" class="hidden space-y-2">
+                    <div class="flex gap-2">
+                      <input id="cloud-clinic-search" type="text" class="settings-input flex-1 text-xs" placeholder="Klinik adı ara…" />
+                      <button type="button" id="btn-cloud-clinic-search" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Ara</button>
+                    </div>
+                    <div id="cloud-clinic-search-results" class="cloud-lab-links-list space-y-1.5"></div>
+                  </div>
+
+                  <div id="clinic-link-tab-code" class="hidden space-y-1.5 p-2.5 rounded-lg border mp-border">
+                    <p class="text-[10px] mp-text-muted">Klinik eşleştirme kodu ile bağlantı isteği gönderin:</p>
+                    <input id="cloud-clinic-link-code" type="text" class="settings-input font-mono uppercase mb-2" placeholder="KLİNİK KODU" />
+                    <input id="cloud-clinic-link-note" type="text" class="settings-input text-xs mb-2" placeholder="Not (opsiyonel)" />
+                    <button type="button" id="btn-cloud-request-clinic" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg w-full">İstek gönder</button>
+                  </div>
+                </div>
+
+                <button type="button" id="btn-cloud-sign-out" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg w-full mt-2">Çıkış</button>
+              </div>
+
+              <p class="text-[10px] mp-text-faint leading-relaxed">
+                Bulut isteğe bağlıdır. Ölçüler yerelde kalır; MeshPack Lab kullanan bir laboratuvarla çalışıyorsanız hesap açıp lab kodunu eşleştirin.
+              </p>
             </section>
 
             <!-- Önizleme -->
@@ -484,7 +714,53 @@
               <div>
                 <label class="settings-label" for="setting-session-timeout" data-i18n="session_timeout">Oturum zaman aşımı (dk)</label>
                 <input id="setting-session-timeout" type="number" min="1" max="120" class="settings-input" />
+                <p class="text-[10px] mp-text-faint mt-1" data-i18n="session_timeout_hint">Hareketsizlik sonrası uygulama kilidi tekrar sorulur.</p>
               </div>
+              <div class="pt-2 mp-border-t space-y-2">
+                <h3 class="text-sm font-medium mp-text-title" data-i18n="app_lock_title">Uygulama kilidi</h3>
+                <p class="text-[11px] mp-text-muted" data-i18n="app_lock_desc">Her işlem denetim kaydında kullanıcı adıyla saklanır.</p>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" id="btn-app-lock-now" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg" data-i18n="app_lock_now">Şimdi kilitle</button>
+                  <button type="button" id="btn-app-lock-change-pin" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg" data-i18n="app_lock_change">PIN değiştir</button>
+                </div>
+              </div>
+              <div id="local-users-admin-panel" class="hidden pt-2 mp-border-t space-y-2">
+                <h3 class="text-sm font-medium mp-text-title" data-i18n="local_users_title">Kullanıcılar</h3>
+                <p class="text-[11px] mp-text-muted" data-i18n="local_users_desc">Klinik personeli için ayrı hesap — kim ne yaptı denetimde görünür.</p>
+                <ul id="local-users-list" class="text-xs space-y-1 mp-text-secondary"></ul>
+                <div class="space-y-2 p-2.5 rounded-lg border mp-border">
+                  <input id="new-local-user-name" type="text" class="settings-input" placeholder="Ad soyad" />
+                  <input id="new-local-user-pin" type="password" class="settings-input" placeholder="PIN (min. 4)" />
+                  <select id="new-local-user-role" class="settings-input">
+                    <option value="assistant">Asistan</option>
+                    <option value="doctor">Doktor</option>
+                  </select>
+                  <button type="button" id="btn-create-local-user" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg w-full">Kullanıcı ekle</button>
+                  <p id="local-users-status" class="text-[10px] mp-text-muted hidden"></p>
+                </div>
+              </div>
+              <div class="pt-2 mp-border-t space-y-2">
+                <h3 class="text-sm font-medium mp-text-title" data-i18n="db_backup_title">Veritabanı yedekleme</h3>
+                <p class="text-[11px] mp-text-muted" data-i18n="db_backup_desc">Hasta kayıtları, vakalar ve eşleştirmeler SQLite dosyasında saklanır.</p>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" id="btn-db-backup" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg">Yedekle</button>
+                  <button type="button" id="btn-db-export" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg">Dışa aktar…</button>
+                </div>
+                <p id="db-backup-status" class="text-[10px] mp-text-muted hidden"></p>
+              </div>
+            </section>
+
+            <!-- İşlem günlüğü -->
+            <section id="settings-panel-audit" class="settings-panel hidden space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <h3 class="text-sm font-medium mp-text-title" data-i18n="activity_log_title">İşlem günlüğü</h3>
+                  <p class="text-[11px] mp-text-muted mt-0.5" data-i18n="activity_log_desc">Giriş, ölçü, vaka, gönderim ve kullanıcı işlemleri — kim ne yaptı.</p>
+                </div>
+                <button type="button" id="btn-audit-refresh" class="mp-btn-secondary text-[10px] px-2.5 py-1.5 rounded-lg shrink-0">Yenile</button>
+              </div>
+              <div id="activity-log-filters" class="activity-log-filters"></div>
+              <div id="audit-log-list" class="audit-log-list"></div>
             </section>
           </div>
         </div>
@@ -493,6 +769,48 @@
           <button id="btn-settings-cancel" type="button" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors" data-i18n="cancel">İptal</button>
           <button id="btn-settings-save" type="button" class="px-4 py-2 rounded-lg text-sm font-medium bg-medical-accent text-white hover:bg-medical-accent/80 transition-colors" data-i18n="save">Kaydet</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Uygulama kilidi -->
+    <div id="app-lock-screen" class="app-lock-screen hidden" aria-modal="true" role="dialog">
+      <div class="app-lock-card">
+        <div class="app-lock-logo" aria-hidden="true">🦷</div>
+        <h1 id="app-lock-title" class="app-lock-title">MeshPack</h1>
+        <p id="app-lock-subtitle" class="app-lock-subtitle">Kimlik seçin ve PIN ile giriş yapın.</p>
+        <div class="app-lock-fields space-y-2">
+          <div id="app-lock-name-wrap" class="hidden">
+            <label class="settings-label" for="app-lock-name">Ad soyad</label>
+            <input id="app-lock-name" type="text" class="settings-input app-lock-input" placeholder="Dr. Ali Yılmaz" autocomplete="name" />
+          </div>
+          <div id="app-lock-user-wrap">
+            <label class="settings-label" for="app-lock-user">Kullanıcı</label>
+            <select id="app-lock-user" class="settings-input app-lock-input"></select>
+          </div>
+          <input
+            id="app-lock-pin"
+            type="password"
+            class="settings-input app-lock-input"
+            autocomplete="current-password"
+            placeholder="PIN"
+          />
+          <input
+            id="app-lock-pin-new"
+            type="password"
+            class="settings-input app-lock-input hidden"
+            autocomplete="new-password"
+            placeholder="Yeni PIN"
+          />
+          <input
+            id="app-lock-pin-confirm"
+            type="password"
+            class="settings-input app-lock-input hidden"
+            autocomplete="new-password"
+            placeholder="PIN (tekrar)"
+          />
+        </div>
+        <p id="app-lock-error" class="app-lock-error hidden"></p>
+        <button type="button" id="app-lock-submit" class="mp-btn-primary app-lock-submit w-full">Giriş yap</button>
       </div>
     </div>
 

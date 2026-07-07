@@ -20,11 +20,15 @@ const TAB_IDS = [
   "layout",
   "watch",
   "upload",
+  "cloud",
   "preview",
   "planning",
   "alignment",
   "general",
+  "audit",
 ];
+
+let onTabSwitch = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -58,7 +62,6 @@ function fillForm() {
   setVal("setting-zip-template", draft.zip_name_template);
   setVal("setting-after-upload", draft.after_upload);
   setVal("setting-archive-folder", draft.archive_folder || "");
-  setCheck("setting-auto-upload", draft.auto_upload);
   setCheck("setting-vis-upper", draft.visibility_upper);
   setCheck("setting-vis-lower", draft.visibility_lower);
   setCheck("setting-vis-bite", draft.visibility_bite);
@@ -104,7 +107,6 @@ function readForm() {
     zip_name_template: getVal("setting-zip-template"),
     after_upload: getVal("setting-after-upload"),
     archive_folder: getVal("setting-archive-folder") || null,
-    auto_upload: getCheck("setting-auto-upload"),
     visibility_upper: getCheck("setting-vis-upper"),
     visibility_lower: getCheck("setting-vis-lower"),
     visibility_bite: getCheck("setting-vis-bite"),
@@ -146,15 +148,18 @@ function toggleArchiveRow() {
 }
 
 function switchTab(tab) {
+  if (!TAB_IDS.includes(tab)) tab = "appearance";
   activeTab = tab;
   TAB_IDS.forEach((id) => {
     $(`settings-tab-${id}`)?.classList.toggle("active", id === tab);
     $(`settings-panel-${id}`)?.classList.toggle("hidden", id !== tab);
   });
+  onTabSwitch?.(tab);
 }
 
-export function openSettingsModal() {
+export function openSettingsModal(initialTab = activeTab) {
   bindDraft();
+  switchTab(initialTab);
   $("settings-modal")?.classList.remove("hidden");
 }
 
@@ -162,7 +167,8 @@ export function closeSettingsModal() {
   $("settings-modal")?.classList.add("hidden");
 }
 
-export function initSettingsUI({ onSave, onDriveAuth, onIcpAlign }) {
+export function initSettingsUI({ onSave, onDriveAuth, onIcpAlign, onTabSwitch: tabSwitchHandler }) {
+  onTabSwitch = tabSwitchHandler;
   $("btn-settings")?.addEventListener("click", openSettingsModal);
   $("btn-settings-close")?.addEventListener("click", closeSettingsModal);
   $("btn-settings-cancel")?.addEventListener("click", closeSettingsModal);

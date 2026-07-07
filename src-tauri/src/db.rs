@@ -50,6 +50,34 @@ pub struct ScanLink {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct StemAlias {
+    pub stem_key: String,
+    pub patient_id: String,
+    pub source: String,
+    pub hit_count: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StemRejection {
+    pub stem_key: String,
+    pub patient_id: String,
+    pub file_stem: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SentCaseRow {
+    pub id: String,
+    pub patient_id: String,
+    pub case_number: String,
+    pub session_day: String,
+    pub sent_at: Option<i64>,
+    pub patient_surname: String,
+    pub patient_first_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct AuditEntry {
     pub id: String,
     pub action: String,
@@ -59,6 +87,8 @@ pub struct AuditEntry {
     pub from_case_id: Option<String>,
     pub to_case_id: Option<String>,
     pub reason: Option<String>,
+    pub user_id: Option<String>,
+    pub user_name: Option<String>,
     pub created_at: i64,
 }
 
@@ -133,10 +163,54 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     }
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS patient_stem_aliases (
+            stem_key TEXT PRIMARY KEY NOT NULL,
+            patient_id TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'learned',
+            hit_count INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stem_aliases_patient ON patient_stem_aliases(patient_id)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS patient_stem_rejections (
+            stem_key TEXT NOT NULL,
+            patient_id TEXT NOT NULL,
+            file_stem TEXT,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (stem_key, patient_id),
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stem_rejections_patient ON patient_stem_rejections(patient_id)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    backfill_stem_aliases(conn)?;
+
+    crate::local_users::migrate_schema(conn)?;
+    crate::activity_log::migrate_schema(conn)?;
+
     Ok(())
 }
 
-fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
+pub fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
     let sql = format!("PRAGMA table_info({table})");
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -218,6 +292,185 @@ fn backfill_orphan_scan_links(conn: &Connection) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Geçmiş scan_links kayıtlarından öğrenilmiş önek tablosunu doldurur (yalnızca ilk kez).
+fn backfill_stem_aliases(conn: &Connection) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM patient_stem_aliases", [], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    if count > 0 {
+        return Ok(());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT file_stem, patient_id FROM scan_links
+             WHERE file_stem IS NOT NULL AND file_stem != ''",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    for (file_stem, patient_id) in rows {
+        remember_stem_aliases(conn, &patient_id, &file_stem, "backfill")?;
+    }
+
+    Ok(())
+}
+
+fn row_to_stem_alias(row: &rusqlite::Row<'_>) -> rusqlite::Result<StemAlias> {
+    Ok(StemAlias {
+        stem_key: row.get(0)?,
+        patient_id: row.get(1)?,
+        source: row.get(2)?,
+        hit_count: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
+
+pub fn list_stem_aliases(conn: &Connection) -> Result<Vec<StemAlias>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT stem_key, patient_id, source, hit_count, updated_at
+             FROM patient_stem_aliases ORDER BY updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], row_to_stem_alias)
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Bağlantı sonrası dosya önekini hastaya öğret (birden fazla anahtar varyantı).
+pub fn remember_stem_aliases(
+    conn: &Connection,
+    patient_id: &str,
+    file_stem: &str,
+    source: &str,
+) -> Result<(), String> {
+    if file_stem.trim().is_empty() {
+        return Ok(());
+    }
+
+    let ts = now_ts();
+    for key in crate::stem::stem_lookup_keys(file_stem) {
+        if key.len() < 3 {
+            continue;
+        }
+        conn.execute(
+            "INSERT INTO patient_stem_aliases (stem_key, patient_id, source, hit_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?4)
+             ON CONFLICT(stem_key) DO UPDATE SET
+                patient_id = excluded.patient_id,
+                hit_count = hit_count + 1,
+                source = excluded.source,
+                updated_at = excluded.updated_at",
+            params![key, patient_id, source, ts],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn row_to_stem_rejection(row: &rusqlite::Row<'_>) -> rusqlite::Result<StemRejection> {
+    Ok(StemRejection {
+        stem_key: row.get(0)?,
+        patient_id: row.get(1)?,
+        file_stem: row.get(2)?,
+        created_at: row.get(3)?,
+    })
+}
+
+pub fn list_stem_rejections(conn: &Connection) -> Result<Vec<StemRejection>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT stem_key, patient_id, file_stem, created_at
+             FROM patient_stem_rejections ORDER BY created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], row_to_stem_rejection)
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Yanlış hasta önerisini reddet; ilgili öğrenilmiş önekleri temizle.
+pub fn reject_stem_suggestion(
+    conn: &Connection,
+    file_stem: &str,
+    patient_id: &str,
+) -> Result<(), String> {
+    if file_stem.trim().is_empty() || patient_id.trim().is_empty() {
+        return Err("Geçersiz öneri reddi".to_string());
+    }
+
+    let ts = now_ts();
+    for key in crate::stem::stem_lookup_keys(file_stem) {
+        if key.len() < 3 {
+            continue;
+        }
+        conn.execute(
+            "INSERT INTO patient_stem_rejections (stem_key, patient_id, file_stem, created_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(stem_key, patient_id) DO NOTHING",
+            params![key, patient_id, file_stem, ts],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "DELETE FROM patient_stem_aliases WHERE stem_key = ?1 AND patient_id = ?2",
+            params![key, patient_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    write_audit(
+        conn,
+        "reject_suggestion",
+        Some(file_stem),
+        None,
+        Some(patient_id),
+        None,
+        None,
+        None,
+    )?;
+
+    Ok(())
+}
+
+pub fn export_database_copy(dest: &std::path::Path) -> Result<(), String> {
+    let src = db_path();
+    if !src.exists() {
+        return Err("Veritabanı dosyası bulunamadı".to_string());
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::copy(&src, dest).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn backup_database_default() -> Result<PathBuf, String> {
+    let dir = dirs::download_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("MeshPack")
+        .join("backups");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let dest = dir.join(format!("meshpack-{stamp}.db"));
+    export_database_copy(&dest)?;
+    Ok(dest)
 }
 
 pub fn open() -> Result<Connection, String> {
@@ -316,10 +569,11 @@ fn write_audit(
     to_case_id: Option<&str>,
     reason: Option<&str>,
 ) -> Result<(), String> {
+    let (user_id, user_name) = crate::local_users::audit_actor();
     conn.execute(
         "INSERT INTO audit_log (id, action, file_path, from_patient_id, to_patient_id,
-         from_case_id, to_case_id, reason, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         from_case_id, to_case_id, reason, user_id, user_name, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             Uuid::new_v4().to_string(),
             action,
@@ -329,10 +583,27 @@ fn write_audit(
             from_case_id,
             to_case_id,
             reason,
+            user_id,
+            user_name,
             now_ts()
         ],
     )
     .map_err(|e| e.to_string())?;
+
+    let summary = crate::activity_log::scan_action_summary(action, file_path, reason);
+    let patient_id = to_patient_id.or(from_patient_id);
+    let case_id = to_case_id.or(from_case_id);
+    crate::activity_log::write(
+        conn,
+        "scan",
+        action,
+        &summary,
+        None,
+        patient_id,
+        case_id,
+    )
+    .ok();
+
     Ok(())
 }
 
@@ -459,6 +730,18 @@ pub fn create_patient(
     )
     .map_err(|e| e.to_string())?;
 
+    let name = format!("{} {}", surname.trim(), first_name.trim());
+    crate::activity_log::write(
+        conn,
+        "patient",
+        "create",
+        &format!("Hasta oluşturuldu: {name}"),
+        None,
+        Some(&id),
+        None,
+    )
+    .ok();
+
     get_patient(conn, &id)?.ok_or_else(|| "Hasta oluşturulamadı".to_string())
 }
 
@@ -486,6 +769,19 @@ pub fn update_patient(
 }
 
 pub fn delete_patient(conn: &Connection, id: &str) -> Result<(), String> {
+    if let Ok(Some(p)) = get_patient(conn, id) {
+        let name = format!("{} {}", p.surname, p.first_name);
+        crate::activity_log::write(
+            conn,
+            "patient",
+            "delete",
+            &format!("Hasta silindi: {name}"),
+            None,
+            Some(id),
+            None,
+        )
+        .ok();
+    }
     conn.execute("DELETE FROM patients WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -572,7 +868,39 @@ pub fn list_patient_cases(conn: &Connection, patient_id: &str) -> Result<Vec<Cas
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
+pub fn list_sent_cases(conn: &Connection, limit: i64) -> Result<Vec<SentCaseRow>, String> {
+    let capped = limit.clamp(1, 200);
+    let mut stmt = conn
+        .prepare(
+            "SELECT c.id, c.patient_id, c.case_number, c.session_day, c.sent_at,
+             p.surname, p.first_name
+             FROM cases c
+             JOIN patients p ON p.id = c.patient_id
+             WHERE c.status = ?1
+             ORDER BY c.sent_at DESC
+             LIMIT ?2",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![CASE_STATUS_SENT, capped], |row| {
+            Ok(SentCaseRow {
+                id: row.get(0)?,
+                patient_id: row.get(1)?,
+                case_number: row.get(2)?,
+                session_day: row.get(3)?,
+                sent_at: row.get(4)?,
+                patient_surname: row.get(5)?,
+                patient_first_name: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 pub fn update_case_status(conn: &Connection, case_id: &str, status: &str) -> Result<Case, String> {
+    let before = get_case(conn, case_id)?;
     let ts = now_ts();
     let sent_at = if status == CASE_STATUS_SENT {
         Some(ts)
@@ -595,7 +923,55 @@ pub fn update_case_status(conn: &Connection, case_id: &str, status: &str) -> Res
     }
 
     let _ = sent_at;
-    get_case(conn, case_id)?.ok_or_else(|| "Vaka bulunamadı".to_string())
+    let case_row = get_case(conn, case_id)?.ok_or_else(|| "Vaka bulunamadı".to_string())?;
+
+    if before.as_ref().map(|c| c.status.as_str()) != Some(status) {
+        let from = before
+            .as_ref()
+            .map(|c| crate::activity_log::case_status_label(&c.status))
+            .unwrap_or("—");
+        let to = crate::activity_log::case_status_label(status);
+        crate::activity_log::write(
+            conn,
+            "case",
+            "status_change",
+            &format!(
+                "{}: {} → {}",
+                case_row.case_number, from, to
+            ),
+            None,
+            Some(&case_row.patient_id),
+            Some(case_id),
+        )
+        .ok();
+    }
+
+    Ok(case_row)
+}
+
+/// Planlama sayfası açılınca `linked` → `planning` geçişi.
+pub fn begin_case_planning(conn: &Connection, case_id: &str) -> Result<Case, String> {
+    let ts = now_ts();
+    conn.execute(
+        "UPDATE cases SET status = ?2, updated_at = ?3 WHERE id = ?1 AND status = ?4",
+        params![case_id, CASE_STATUS_PLANNING, ts, CASE_STATUS_LINKED],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let case_row = get_case(conn, case_id)?.ok_or_else(|| "Vaka bulunamadı".to_string())?;
+    if case_row.status == CASE_STATUS_PLANNING {
+        crate::activity_log::write(
+            conn,
+            "case",
+            "planning_started",
+            &format!("{} planlamaya alındı", case_row.case_number),
+            None,
+            Some(&case_row.patient_id),
+            Some(case_id),
+        )
+        .ok();
+    }
+    Ok(case_row)
 }
 
 pub fn update_case_lab_notes(
@@ -780,6 +1156,8 @@ pub fn link_scan(
         None,
     )?;
 
+    remember_stem_aliases(conn, patient_id, file_stem, "learned")?;
+
     get_scan_link(conn, file_path)?
         .filter(|l| l.patient_id == patient_id && l.case_id.as_deref() == Some(case_id))
         .ok_or_else(|| "Bağlantı kaydedilemedi — ölçü başka hastaya ait olabilir".to_string())
@@ -825,6 +1203,8 @@ pub fn reassign_scan(
         Some(reason),
     )?;
 
+    remember_stem_aliases(conn, to_patient_id, &existing.file_stem, "learned")?;
+
     conn.execute(
         "UPDATE patients SET updated_at = ?2 WHERE id = ?1",
         params![to_patient_id, ts],
@@ -865,4 +1245,61 @@ pub fn detach_scan(conn: &Connection, file_path: &str, reason: &str) -> Result<(
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+pub fn list_audit_log(
+    conn: &Connection,
+    limit: i64,
+    patient_id: Option<&str>,
+) -> Result<Vec<AuditEntry>, String> {
+    let capped = limit.clamp(1, 500);
+
+    fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuditEntry> {
+        Ok(AuditEntry {
+            id: row.get(0)?,
+            action: row.get(1)?,
+            file_path: row.get(2)?,
+            from_patient_id: row.get(3)?,
+            to_patient_id: row.get(4)?,
+            from_case_id: row.get(5)?,
+            to_case_id: row.get(6)?,
+            reason: row.get(7)?,
+            user_id: row.get(8)?,
+            user_name: row.get(9)?,
+            created_at: row.get(10)?,
+        })
+    }
+
+    if let Some(pid) = patient_id.filter(|s| !s.is_empty()) {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, action, file_path, from_patient_id, to_patient_id,
+                 from_case_id, to_case_id, reason, user_id, user_name, created_at
+                 FROM audit_log
+                 WHERE from_patient_id = ?1 OR to_patient_id = ?1
+                 ORDER BY created_at DESC
+                 LIMIT ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![pid, capped], map_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    } else {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, action, file_path, from_patient_id, to_patient_id,
+                 from_case_id, to_case_id, reason, user_id, user_name, created_at
+                 FROM audit_log
+                 ORDER BY created_at DESC
+                 LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![capped], map_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
 }

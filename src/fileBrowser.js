@@ -28,9 +28,26 @@ import {
   listCaseScans,
   listPatientCases,
   reassignScan,
-  caseStatusMeta,
 } from "./cases.js";
 import { askDetachReason, askReassignReason, askSameDayCase } from "./caseModals.js";
+import { topPatientSuggestion } from "./patientSuggestion.js";
+import { buildStemAliasMap, listStemAliases } from "./patientStemAliases.js";
+import {
+  buildStemRejectionSet,
+  listStemRejections,
+  rejectStemSuggestion,
+} from "./patientStemRejections.js";
+import { renderCaseStatusSteps } from "./caseStatusSteps.js";
+import {
+  displayCaseStatus,
+  hasPlanningContent,
+  planningActionLabel,
+} from "./casePlanning.js";
+import {
+  comparePatientsByActivity,
+  comparePatientsBySurname,
+  summarizePatientCases,
+} from "./patientListSummary.js";
 
 const SCAN_TYPES = ["upper", "lower", "bite"];
 
@@ -125,6 +142,7 @@ export class FileBrowser {
     this.onSessionSelect = options.onSessionSelect;
     this.onPatientUpdated = options.onPatientUpdated;
     this.onOpenPlanning = options.onOpenPlanning;
+    this.onCaseLinked = options.onCaseLinked;
     this.onToggleScan = options.onToggleScan;
     this.getSessionPaths = options.getSessionPaths;
     this.getSessionPatientKey = options.getSessionPatientKey;
@@ -133,11 +151,14 @@ export class FileBrowser {
 
     this.patients = [];
     this.scanLinks = new Map();
+    this.stemAliases = new Map();
+    this.stemRejections = new Set();
     this.folderFiles = [];
     this.folderFileMap = new Map();
     this.groupFilter = "pending";
     this.expandedGroupIds = new Set();
     this.searchQuery = "";
+    this.patientSort = "surname";
     this.selectedPatient = null;
     this.selectedSessionId = null;
     this.sessionsByPatient = new Map();
@@ -164,9 +185,15 @@ export class FileBrowser {
         </div>
 
         <div class="mp-border-t pt-2 flex flex-col flex-1 min-h-0">
-          <div class="flex items-center justify-between mb-2 shrink-0">
+          <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
             <span class="text-sm font-semibold mp-text-title">Hastalar</span>
-            <button id="btn-new-patient" type="button" class="mp-btn-ghost text-[10px] px-2 py-0.5 rounded">+ Yeni</button>
+            <div class="flex items-center gap-1">
+              <div class="patient-sort-toggle" role="group" aria-label="Sıralama">
+                <button type="button" data-patient-sort="surname" class="patient-sort-btn is-active" title="Soyada göre">A–Z</button>
+                <button type="button" data-patient-sort="activity" class="patient-sort-btn" title="Son aktiviteye göre">Son</button>
+              </div>
+              <button id="btn-new-patient" type="button" class="mp-btn-ghost text-[10px] px-2 py-0.5 rounded">+ Yeni</button>
+            </div>
           </div>
           <div class="relative mb-2 shrink-0">
             <input id="patient-search" type="search" placeholder="Hasta ara..."
@@ -223,6 +250,16 @@ export class FileBrowser {
       this.render();
     });
 
+    this.listContainer.querySelectorAll("[data-patient-sort]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.patientSort = btn.dataset.patientSort;
+        this.listContainer.querySelectorAll("[data-patient-sort]").forEach((b) => {
+          b.classList.toggle("is-active", b.dataset.patientSort === this.patientSort);
+        });
+        this.render();
+      });
+    });
+
     this.listContainer.querySelector("#btn-new-patient").addEventListener("click", () => this._createPatient());
     this.detailContainer?.querySelector("#btn-empty-new-patient")?.addEventListener("click", () => this._createPatient());
 
@@ -253,6 +290,25 @@ export class FileBrowser {
       if (linkBtn) {
         const group = this._findGroup(linkBtn.dataset.groupId);
         if (group) await this._linkGroup(group, this.selectedPatient);
+        return;
+      }
+
+      const suggestBtn = e.target.closest("[data-action='link-suggested']");
+      if (suggestBtn) {
+        const group = this._findGroup(suggestBtn.dataset.groupId);
+        const patient = this.patients.find((p) => p.id === suggestBtn.dataset.patientId);
+        if (group && patient) await this._linkGroup(group, patient);
+        return;
+      }
+
+      const rejectBtn = e.target.closest("[data-action='reject-suggested']");
+      if (rejectBtn) {
+        const group = this._findGroup(rejectBtn.dataset.groupId);
+        const patientId = rejectBtn.dataset.patientId;
+        if (group && patientId) {
+          await rejectStemSuggestion(group.fileStem, patientId);
+          await this.refresh();
+        }
         return;
       }
 
@@ -531,10 +587,16 @@ export class FileBrowser {
   async _afterLink(patient, caseId = null) {
     await this._loadPatients();
     await this._loadScanLinks();
+    await this._loadStemAliases();
     await this._loadCasesCache();
     this.selectedPatient = this.patients.find((p) => p.id === patient.id) || patient;
     if (caseId) this.selectedSessionId = caseId;
     this.openPatient(this.selectedPatient, caseId || undefined);
+
+    const session = this.getActiveScanSession();
+    if (session?.caseId) {
+      this.onCaseLinked?.(this.selectedPatient, session);
+    }
   }
 
   _sessionFromCase(caseRow, links) {
@@ -560,6 +622,7 @@ export class FileBrowser {
       caseId: caseRow.id,
       caseNumber: caseRow.case_number,
       status: caseRow.status,
+      sentAt: caseRow.sent_at ?? null,
       sessionDay: caseRow.session_day,
       modifiedAt,
       scans,
@@ -603,6 +666,29 @@ export class FileBrowser {
       this.groupFilter = "all";
       this._renderGroupFilters();
     }
+  }
+
+  getSuggestionForPath(filePath) {
+    const groups = this._getLinkableGroups();
+    const group = groups.find((g) => g.files.some((f) => f.path === filePath));
+    if (!group?.pendingCount) return null;
+    return topPatientSuggestion(group, this.patients, this.scanLinks, this.stemAliases, this.stemRejections);
+  }
+
+  _suggestedPatientIds() {
+    const ids = new Set();
+    for (const group of this._getLinkableGroups()) {
+      if (!group.pendingCount) continue;
+      const top = topPatientSuggestion(
+        group,
+        this.patients,
+        this.scanLinks,
+        this.stemAliases,
+        this.stemRejections
+      );
+      if (top) ids.add(top.patient.id);
+    }
+    return ids;
   }
 
   getPatientLinks(patientId) {
@@ -653,6 +739,16 @@ export class FileBrowser {
     this.scanLinks = new Map(links.map((l) => [l.file_path, l]));
   }
 
+  async _loadStemAliases() {
+    const rows = await listStemAliases();
+    this.stemAliases = buildStemAliasMap(rows);
+  }
+
+  async _loadStemRejections() {
+    const rows = await listStemRejections();
+    this.stemRejections = buildStemRejectionSet(rows);
+  }
+
   async _loadFolderFiles() {
     if (!this.watchFolder) {
       this.folderFiles = [];
@@ -674,7 +770,13 @@ export class FileBrowser {
 
   async refresh() {
     try {
-      await Promise.all([this._loadPatients(), this._loadScanLinks(), this._loadFolderFiles()]);
+      await Promise.all([
+        this._loadPatients(),
+        this._loadScanLinks(),
+        this._loadStemAliases(),
+        this._loadStemRejections(),
+        this._loadFolderFiles(),
+      ]);
       await this._loadCasesCache();
 
       if (this.selectedPatient) {
@@ -689,16 +791,29 @@ export class FileBrowser {
 
   _renderPatientList() {
     const q = this.searchQuery;
-    const filtered = this.patients.filter((p) => {
+    let filtered = this.patients.filter((p) => {
       if (!q) return true;
       const label = patientListLabel(p).toLowerCase();
       const display = patientDisplayName(p).toLowerCase();
       return label.includes(q) || display.includes(q) || (p.notes || "").toLowerCase().includes(q);
     });
 
+    if (this.patientSort === "activity") {
+      filtered = [...filtered].sort((a, b) =>
+        comparePatientsByActivity(a, b, this.sessionsByPatient)
+      );
+    } else {
+      filtered = [...filtered].sort(comparePatientsBySurname);
+    }
+
+    const actionCount = filtered.filter((p) => {
+      const sessions = this.sessionsByPatient.get(p.id) || [];
+      return summarizePatientCases(sessions).needsAction;
+    }).length;
+
     this.patientMetaEl.textContent =
       filtered.length === this.patients.length
-        ? `${filtered.length} hasta`
+        ? `${filtered.length} hasta${actionCount ? ` · ${actionCount} işlem bekliyor` : ""}`
         : `${filtered.length} / ${this.patients.length} hasta`;
 
     if (filtered.length === 0) {
@@ -708,21 +823,41 @@ export class FileBrowser {
 
     const activeId = this.selectedPatient?.id;
     const sessionKey = this.getSessionPatientKey?.();
+    const suggestedIds = this._suggestedPatientIds();
 
     this.patientListEl.innerHTML = `
       <table class="patient-table w-full">
         <thead>
-          <tr><th>Soyad</th><th>Ad</th><th>Ölçü</th></tr>
+          <tr>
+            <th>Soyad</th>
+            <th>Ad</th>
+            <th>Durum</th>
+            <th class="patient-th-case">Vaka</th>
+          </tr>
         </thead>
         <tbody>
           ${filtered
             .map((p) => {
               const selected = activeId === p.id || sessionKey === p.id;
+              const sessions = this.sessionsByPatient.get(p.id) || [];
+              const summary = summarizePatientCases(sessions);
+              const statusHtml = summary.displayStatus
+                ? `<span class="case-status-pill patient-row-status ${summary.displayStatus.cls}">${summary.displayStatus.label}</span>`
+                : `<span class="patient-row-status-empty">—</span>`;
+              const caseHtml = summary.caseNumber
+                ? `<span class="patient-row-case font-mono">${summary.caseNumber}</span>`
+                : `<span class="patient-row-status-empty">—</span>`;
+              const actionDot = summary.needsAction
+                ? `<span class="patient-action-dot" title="${summary.actionHint || ""}"></span>`
+                : "";
               return `
-              <tr data-patient-id="${p.id}" class="patient-row ${selected ? "patient-row-selected" : ""}">
-                <td class="patient-cell-name truncate">${p.surname || "—"}</td>
+              <tr data-patient-id="${p.id}" class="patient-row ${selected ? "patient-row-selected" : ""} ${summary.needsAction ? "patient-row-needs-action" : ""}">
+                <td class="patient-cell-name truncate">
+                  ${actionDot}${p.surname || "—"}${suggestedIds.has(p.id) ? '<span class="patient-suggest-badge">öneri</span>' : ""}
+                </td>
                 <td class="truncate">${p.first_name || "—"}</td>
-                <td class="text-center text-[10px] mp-text-muted">${p.scan_count || 0}</td>
+                <td class="patient-cell-status">${statusHtml}</td>
+                <td class="patient-cell-case">${caseHtml}</td>
               </tr>`;
             })
             .join("")}
@@ -772,6 +907,44 @@ export class FileBrowser {
             ? `${group.pendingCount} dosya bekliyor`
             : `${group.pendingCount} dosya eşleşmemiş`;
 
+        const suggestion =
+          group.pendingCount > 0
+            ? topPatientSuggestion(
+                group,
+                this.patients,
+                this.scanLinks,
+                this.stemAliases,
+                this.stemRejections
+              )
+            : null;
+        const suggestionHtml = suggestion
+          ? `<div class="measure-group-suggestion">
+              <div class="measure-group-suggestion-text">
+                <span class="measure-group-suggestion-label">Bu hasta olabilir</span>
+                <strong>${suggestion.label}</strong>
+                <span class="measure-group-suggestion-score">${suggestion.score}%</span>
+                ${
+                  suggestion.reasons.length
+                    ? `<span class="measure-group-suggestion-reason">${suggestion.reasons.slice(0, 2).join(" · ")}</span>`
+                    : ""
+                }
+              </div>
+              <div class="measure-group-suggestion-actions">
+                <button type="button" data-action="link-suggested"
+                  data-group-id="${group.id}" data-patient-id="${suggestion.patient.id}"
+                  class="mp-btn-primary text-[10px] px-2 py-1 rounded shrink-0">
+                  → Bağla
+                </button>
+                <button type="button" data-action="reject-suggested"
+                  data-group-id="${group.id}" data-patient-id="${suggestion.patient.id}"
+                  class="mp-btn-ghost text-[10px] px-2 py-1 rounded shrink-0 measure-suggest-reject"
+                  title="Bu hasta değil — bir daha önerme">
+                  Bu değil
+                </button>
+              </div>
+            </div>`
+          : "";
+
         const fileRows = group.files
           .map((f) => {
             const link = this.scanLinks.get(f.path);
@@ -819,7 +992,7 @@ export class FileBrowser {
           </div>
           ${
             group.pendingCount > 0
-              ? `<div class="text-[10px] mp-text-muted mt-1">${pendingLabel}</div>
+              ? `${suggestionHtml}<div class="text-[10px] mp-text-muted mt-1">${pendingLabel}</div>
           <div class="flex flex-wrap gap-1.5 mt-2">
             <button type="button" data-action="create-link" data-group-id="${group.id}"
               class="mp-btn-primary text-[10px] px-2 py-1 rounded">+ Hasta oluştur</button>
@@ -858,12 +1031,36 @@ export class FileBrowser {
 
     const activeSession = this.getActiveScanSession();
     const sessions = this.getPatientSessions(patient.id);
+    const summary = summarizePatientCases(sessions);
     const count = getPatientScanCount(activeSession || { scans: {} });
     const status = setStatusLabel(count);
     const links = this.getPatientLinks(patient.id);
     const showHint = links.some((l) => needsNamingHint(l.file_stem));
 
+    const summaryStrip =
+      sessions.length > 0
+        ? `<div class="patient-summary-strip">
+            ${
+              summary.displayStatus
+                ? `<span class="case-status-pill ${summary.displayStatus.cls}">${summary.displayStatus.label}</span>`
+                : ""
+            }
+            ${summary.caseNumber ? `<span class="patient-summary-case font-mono">${summary.caseNumber}</span>` : ""}
+            ${
+              summary.actionHint
+                ? `<span class="patient-summary-hint">${summary.actionHint}</span>`
+                : ""
+            }
+            ${
+              summary.sentCount > 0
+                ? `<span class="patient-summary-meta">${summary.sentCount} gönderildi · ${summary.openCount} açık</span>`
+                : `<span class="patient-summary-meta">${sessions.length} vaka</span>`
+            }
+          </div>`
+        : "";
+
     const infoForm = `
+      ${summaryStrip}
       ${showHint ? `
       <div class="filename-hint mb-4 px-3 py-2 rounded-lg border text-[10px] leading-relaxed mp-text-muted">
         💡 Dosya adında <strong class="mp-text-secondary">soyad-ad arasına tire (-)</strong> koyarsanız öneri daha doğru olur.
@@ -915,6 +1112,19 @@ export class FileBrowser {
                 const isActive = s.id === (activeSession?.id || this.selectedSessionId);
                 const isToday = dayKey(s.modifiedAt) === dayKey(Date.now() / 1000);
                 const caseLabel = s.caseNumber ? `<span class="scan-history-case">${s.caseNumber}</span>` : "";
+                const caseStatus = s.case ? displayCaseStatus(s.case) : s.status ? displayCaseStatus({ status: s.status }) : null;
+                const statusPill = caseStatus
+                  ? `<span class="case-status-pill ${caseStatus.cls}">${caseStatus.label}</span>`
+                  : "";
+                const planBadge =
+                  s.case && hasPlanningContent(s.case) && s.status !== "sent"
+                    ? `<span class="case-planned-badge">✓ plan</span>`
+                    : "";
+                const planLabel = s.case ? planningActionLabel(s.case) : "Planla";
+                const sentInfo =
+                  s.sentAt && s.status === "sent"
+                    ? `<span class="text-[10px] text-medical-green">Gönderildi ${formatShortDate(s.sentAt)}</span>`
+                    : "";
                 return `
                 <button type="button" data-session-id="${s.id}"
                   class="scan-history-item ${isActive ? "scan-history-item-active" : ""}">
@@ -926,10 +1136,13 @@ export class FileBrowser {
                   <div class="scan-history-item-meta">
                     <span class="flex gap-1">${scanDots(s)}</span>
                     <span class="text-[10px] ${sStatus.cls}">${sStatus.text}</span>
+                    ${statusPill}
+                    ${planBadge}
+                    ${sentInfo}
                     ${
                       s.caseId
                         ? `<button type="button" data-action="open-planning" data-session-id="${s.id}"
-                            class="text-[10px] text-medical-accent hover:underline shrink-0">Planla</button>`
+                            class="text-[10px] text-medical-accent hover:underline shrink-0">${planLabel}</button>`
                         : ""
                     }
                     ${index === 0 ? '<span class="scan-history-badge">Son</span>' : ""}
@@ -965,7 +1178,8 @@ export class FileBrowser {
       return;
     }
 
-    const caseMeta = activeSession.case ? caseStatusMeta(activeSession.status) : null;
+    const caseMeta = activeSession.case ? displayCaseStatus(activeSession.case) : null;
+    const planBtnLabel = activeSession.case ? planningActionLabel(activeSession.case) : "Planla";
 
     if (activeSession.caseNumber && caseMeta) {
       metaEl.innerHTML = `
@@ -973,16 +1187,27 @@ export class FileBrowser {
           <span class="case-status-number">${activeSession.caseNumber}</span>
           <span class="case-status-pill ${caseMeta.cls}">${caseMeta.label}</span>
           ${
-            activeSession.caseId
-              ? `<button type="button" data-action="open-planning" data-session-id="${activeSession.id}"
-                  class="mp-btn-primary text-[10px] px-2 py-0.5 rounded ml-auto shrink-0">Planla →</button>`
+            activeSession.case && hasPlanningContent(activeSession.case) && activeSession.status !== "sent"
+              ? `<span class="case-planned-badge">✓ plan</span>`
               : ""
           }
-        </div>`;
+          ${
+            activeSession.caseId
+              ? `<button type="button" data-action="open-planning" data-session-id="${activeSession.id}"
+                  class="mp-btn-primary text-[10px] px-2 py-0.5 rounded ml-auto shrink-0">${planBtnLabel} →</button>`
+              : ""
+          }
+        </div>
+        ${renderCaseStatusSteps(activeSession.status)}
+        ${
+          activeSession.status === "sent" && activeSession.sentAt
+            ? `<p class="text-[10px] text-medical-green mt-1">Gönderildi: ${formatDate(activeSession.sentAt)}</p>`
+            : ""
+        }`;
     } else if (activeSession.caseId) {
       metaEl.innerHTML = `
         <button type="button" data-action="open-planning" data-session-id="${activeSession.id}"
-          class="mp-btn-primary text-[10px] px-2 py-0.5 rounded">Planla →</button>`;
+          class="mp-btn-primary text-[10px] px-2 py-0.5 rounded">${planBtnLabel} →</button>`;
     } else {
       metaEl.innerHTML = `<span class="text-[10px] mp-text-faint">${patientListLabel(patient)}</span>`;
     }

@@ -38,12 +38,25 @@ fn add_file_to_zip(
     Ok(())
 }
 
+fn add_bytes_to_zip(
+    zip: &mut ZipWriter<File>,
+    entry_name: &str,
+    data: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let options = zip_options();
+    zip.start_file(entry_name, options)?;
+    zip.write_all(data)?;
+    Ok(())
+}
+
 /// Birden fazla tarama dosyasını tek ZIP'e sıkıştırır.
 pub fn compress_scans(
     file_paths: &[String],
     patient_name: &str,
     zip_name_template: &str,
     alignment: Option<&Value>,
+    summary_notes: Option<&str>,
+    manifest_json: Option<&str>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if file_paths.is_empty() {
         return Err("Sıkıştırılacak dosya yok".into());
@@ -81,10 +94,68 @@ pub fn compress_scans(
         zip.write_all(serde_json::to_string_pretty(matrix_data)?.as_bytes())?;
     }
 
+    if let Some(notes) = summary_notes {
+        let trimmed = notes.trim();
+        if !trimmed.is_empty() {
+            add_bytes_to_zip(&mut zip, "is_emri.txt", trimmed.as_bytes())?;
+        }
+    }
+
+    if let Some(manifest) = manifest_json {
+        let trimmed = manifest.trim();
+        if !trimmed.is_empty() {
+            add_bytes_to_zip(&mut zip, "manifest.json", trimmed.as_bytes())?;
+        }
+    }
+
     zip.finish()?;
     log::info!("ZIP oluşturuldu: {} ({} dosya)", zip_path.display(), file_paths.len());
 
     Ok(zip_path)
+}
+
+/// ZIP'i İndirilenler/MeshPack altına kaydeder (e-posta eki için).
+pub fn export_scans_zip(
+    file_paths: &[String],
+    patient_name: &str,
+    zip_name_template: &str,
+    summary_notes: Option<&str>,
+    manifest_json: Option<&str>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let temp_zip = compress_scans(
+        file_paths,
+        patient_name,
+        zip_name_template,
+        None,
+        summary_notes,
+        manifest_json,
+    )?;
+
+    let export_dir = dirs::download_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("MeshPack");
+    std::fs::create_dir_all(&export_dir)?;
+
+    let file_name = temp_zip
+        .file_name()
+        .ok_or("ZIP adı oluşturulamadı")?
+        .to_owned();
+    let dest = export_dir.join(file_name);
+
+    if dest.exists() {
+        std::fs::remove_file(&dest)?;
+    }
+
+    match std::fs::rename(&temp_zip, &dest) {
+        Ok(()) => {}
+        Err(_) => {
+            std::fs::copy(&temp_zip, &dest)?;
+            let _ = std::fs::remove_file(&temp_zip);
+        }
+    }
+
+    log::info!("Vaka ZIP dışa aktarıldı: {}", dest.display());
+    Ok(dest)
 }
 
 pub fn create_notes_file(notes: &str, patient_name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {

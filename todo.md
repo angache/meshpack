@@ -1,6 +1,6 @@
 # MeshPack — Ürün yol haritası
 
-> Klinik ↔ laboratuvar dijital iş akışı. Son güncelleme: konuşma notlarından derlendi.
+> Klinik ↔ laboratuvar dijital iş akışı. Son güncelleme: 2026-07-05 (kod tabanı denetimi).
 
 ---
 
@@ -10,26 +10,26 @@ Tarayıcıdan düşen ölçü → hastaya bağlanır → planlanır → güvenli
 
 ---
 
-## Faz 1 — Ölçü alımı ve hasta eşleştirme `ŞİMDİ`
+## Faz 1 — Ölçü alımı ve hasta eşleştirme `BÜYÜK ÖLÇÜDE BİTTİ`
 
 **Hedef:** Ölçü klasöre düşer, gruplanır, hastaya bağlanır; bağlandıktan sonra başka hastaya geçemez.
 
 | # | Özellik | Durum | Not |
 |---|---------|-------|-----|
-| 1.1 | Klasör izleme (watch) | ✅ Var | |
-| 1.2 | Dosya adından otomatik grup (üst/alt/kapanış seti) | ✅ Var | İsim öneki + gün |
-| 1.3 | Hasta veritabanı (SQLite) | ✅ Var | Klinik hasta kaydı |
-| 1.4 | Grup olarak hastaya bağlama | ✅ Var | Tek tık / yeni hasta |
-| 1.5 | **Ölçü kilidi** — bağlı ölçü normalde taşınamaz | ✅ Var | Varsayılan: kilitli; casual unlink yok |
-| 1.5a | **Yanlış eşleştirme: yeniden atama** | ✅ Var | “Düzelt” + gerekçe + audit log |
-| 1.6 | Yeni ölçü bildirimi + gruba git | ✅ Var | İyileştirilebilir |
-| 1.7 | Mevcut hastaya otomatik öneri (isim öneki eşleşmesi) | 🔲 Yapılacak | “Bu hasta olabilir mi?” |
-| 1.8 | Ölçü durumu: `bekliyor` → `hastaya_bağlı` → `gönderime_hazır` | 🔲 Kısmen | `cases.status` + vaka şeridi; tam state machine sonra |
-| 1.9 | **Aynı gün ikinci ölçü** — hekime sor | ✅ Var | Modal: mevcut vaka / yeni vaka |
+| 1.1 | Klasör izleme (watch) | ✅ | |
+| 1.2 | Dosya adından otomatik grup (üst/alt/kapanış seti) | ✅ | İsim öneki + gün |
+| 1.3 | Hasta veritabanı (SQLite) | ✅ | Klinik hasta kaydı |
+| 1.4 | Grup olarak hastaya bağlama | ✅ | Tek tık / yeni hasta |
+| 1.5 | **Ölçü kilidi** — bağlı ölçü normalde taşınamaz | ✅ | Varsayılan: kilitli; casual unlink yok |
+| 1.5a | **Yanlış eşleştirme: yeniden atama** | ✅ | “Düzelt” + gerekçe + audit log |
+| 1.6 | Yeni ölçü bildirimi + gruba git | ✅ | Banner + gruba kaydır; iyileştirilebilir |
+| 1.7 | Mevcut hastaya otomatik öneri | ✅ MVP | Kural + Jaro-Winkler + alias; **“Bu değil”** reddi |
+| 1.8 | Ölçü / vaka durumu akışı | ✅ Kısmen | Şerit + planlama açılışında `linked`→`planning` |
+| 1.9 | **Aynı gün ikinci ölçü** — hekime sor | ✅ | Modal: mevcut vaka / yeni vaka |
 
 ---
 
-## Faz 2 — Planlama sayfası ve gönderim hazırlığı `YAKINDA`
+## Faz 2 — Planlama sayfası ve gönderim hazırlığı `BÜYÜK ÖLÇÜDE BİTTİ`
 
 **Hedef:** Lab’a gitmeden önce iş emri netleşir. Planlama **ayrı bir sayfa**dır; lab notu, dental chart ve diğer plan alanları **vaka bazlı** (`cases` kaydı) tutulur.
 
@@ -38,9 +38,9 @@ Tarayıcıdan düşen ölçü → hastaya bağlanır → planlanır → güvenli
 | Sayfa | Amaç | Odak |
 |-------|------|------|
 | **Ölçü / Inbox** (mevcut ana ekran) | Klasörden düşen ölçüleri grupla, hastaya bağla, önizle | Hızlı eşleştirme |
-| **Planlama** (yeni tam ekran sayfa) | Seçili vaka için iş emrini hazırla | Lab notu, FDI chart, annotation, gönderim özeti |
+| **Planlama** (tam ekran sayfa) | Seçili vaka için iş emrini hazırla | Lab notu, FDI chart, annotation, gönderim özeti |
 
-Ana ekrandaki footer (lab notu, şablonlar, Drive yükle) **geçici**; planlama sayfası gelince vakaya taşınacak veya sadeleştirilecek.
+Ana ekrandaki footer sadeleştirildi — iş emri ve gönderim yalnızca **Planla** sayfasında.
 
 ### Planlama sayfası — vaka bağlamı
 
@@ -49,79 +49,85 @@ Her planlama oturumu tek bir vakaya kilitli:
 - `MP-2026-0042` · hasta adı · ölçü tarihi
 - Durum: `Bağlandı` → `Planlanıyor` → `Gönderime hazır` → `Gönderildi`
 - Bu vakaya bağlı ölçü seti (üst / alt / kapanış) + 3B önizleme
-- `cases.lab_notes` ve ileride diş planı / annotation JSON
+- `cases.lab_notes`, `dental_plan`, `annotations`, `tooth_shade`
 
 Giriş yolları:
-1. Hasta detayında geçmiş vakadan **Planla** veya vakaya tıkla
-2. Yeni bağlanan set sonrası **“Planlamaya geç”** önerisi (opsiyonel banner)
+
+1. Hasta detayında geçmiş vakadan **Planla** veya vakaya tıkla — ✅
+2. Yeni bağlanan set sonrası **“Planlamaya geç”** banner — ✅
 
 | # | Özellik | Durum | Not |
 |---|---------|-------|-----|
-| 2.0 | **Planlama sayfası** (ayrı tam ekran route/view) | ✅ Kısmen | Lab notu + FDI chart + durum |
-| 2.1 | Vaka / iş emri kavramı (ölçü seti + hasta + tarih) | ✅ Var | `cases` + `MP-YYYY-NNNN` |
-| 2.2 | Serbest metin not (lab notu) | ✅ Var | `cases.lab_notes` planlama sayfasında |
-| 2.3 | Şablon notlar (Zirkonyum, A1, vb.) | ✅ Var | Planlama sayfasında |
-| 2.4 | **Dental chart (FDI 11–48)** | ✅ MVP | Katalog: `src/config/dentalTreatments.js` |
-| 2.4a | Protez kataloğu (config) | ✅ | Ayarlar → Planlama sekmesi; `config.json`’da saklanır |
-| 2.5 | Ölçü görseli üzerine işaretleme / not | ✅ MVP | Planlama 3B viewer; vakaya `annotations` JSON |
-| 2.6 | Planlama tamamlanınca “Gönderime hazır” | ✅ Kısmen | Planlama sayfası butonu → `ready_to_send` |
-| 2.7 | Gönderim önizleme özeti | ✅ MVP | Planlama alt bölüm; kopyala / e-posta / Drive |
-| 2.8 | Eski ölçüler için vaka backfill | ✅ Var | Uygulama açılışında `case_id` boş kayıtlar |
+| 2.0 | **Planlama sayfası** (ayrı tam ekran view) | ✅ MVP | Lab notu, FDI, 3B, VITA renk, gönderim özeti |
+| 2.1 | Vaka / iş emri kavramı | ✅ | `cases` + `MP-YYYY-NNNN` |
+| 2.2 | Serbest metin not (lab notu) | ✅ | `cases.lab_notes` planlama sayfasında |
+| 2.3 | Şablon notlar (Zirkonyum, vb.) | ✅ MVP | Planlama sayfası; `labNoteTemplates.js` |
+| 2.4 | **Dental chart (FDI 11–48)** | ✅ MVP | `dentalTreatments.js` |
+| 2.4a | Protez kataloğu (config) | ✅ | Ayarlar → Planlama sekmesi |
+| 2.4b | Diş rengi (VITA Classical / 3D-Master) | ✅ MVP | `cases.tooth_shade`; planlama sekmeleri |
+| 2.5 | Ölçü görseli üzerine işaretleme / not | ✅ MVP | `annotations` JSON + 3B viewer |
+| 2.6 | “Gönderime hazır” işaretle | ✅ MVP | Kontrol listesi + otomatik geçiş (e-posta/Drive) |
+| 2.7 | Gönderim önizleme özeti | ✅ MVP | Kopyala / mailto / Drive; vaka bazlı |
+| 2.8 | Eski ölçüler için vaka backfill | ✅ | `case_id` boş kayıtlar + stem alias backfill |
 
 ---
 
-## Faz 3 — Laboratuvara gönderim `YAKINDA`
+## Faz 3 — Laboratuvara gönderim `KISMEN`
 
-**Hedef:** MeshPack-Lab varsa doğrudan; yoksa e-posta veya bulut.
+**Hedef:** Varsayılan yerel kanallar (ZIP, Drive, e-posta). Bulut yalnızca MeshPack Lab ortağı varsa.
 
 | # | Özellik | Durum | Not |
 |---|---------|-------|-----|
-| 3.1 | Google Drive ZIP yükleme | ✅ Var | |
-| 3.2 | **MeshPack-Lab** doğrudan gönderim | 🔲 `SONRA` | Henüz hayal aşaması — önce `CasePackage` formatı tasarlanacak |
-| 3.3 | E-posta ile gönderim (ek + özet) | 🔲 | Lab’de MeshPack yoksa |
-| 3.4 | Alternatif bulut (Dropbox, OneDrive, link kopyala) | 🔲 | |
-| 3.5 | Gönderim geçmişi ve durum (gönderildi / lab aldı) | 🔲 | |
-| 3.6 | Gönderim sonrası arşiv / sil / taşı | ✅ Kısmen | Ayarlarda var |
+| 3.0 | **MeshPack Lab (bulut)** | ✅ İskelet | Lab eşleşince görünür; şifreleme sıradaki |
+| 3.1 | Google Drive ZIP yükleme | ✅ | Genel lab kanalı |
+| 3.2 | **MeshPack-Lab** doğrudan gönderim | 🔲 Devam | Cloud kuyruğu + lab uygulaması MVP başladı |
+| 3.3 | E-posta ile gönderim | ✅ Kısmen | ZIP + mailto; gönderildi onayı |
+| 3.4 | CasePackage ZIP kaydet | ✅ | Dropbox / manuel paylaşım |
+| 3.5 | Gönderim geçmişi ve durum | ✅ MVP | Ayarlar → Gönderim |
+| 3.6 | Gönderim sonrası arşiv / sil / taşı | ✅ Kısmen | Ayarlarda `after_upload` |
 
 ---
 
-## Faz 4 — MeshPack-Lab ve güvenli iş akışı `SONRA`
+## Faz 4 — MeshPack-Lab ve güvenli iş akışı `BAŞLADI`
 
-**Hedef:** Klinik–lab arası WhatsApp yerine güvenli, izlenebilir kanal.
+**Hedef:** Supabase üzerinden klinik–lab: vaka, mesaj, bildirim.
 
-| # | Özellik | Not |
-|---|---------|-----|
-| 4.1 | Ortak vaka ID (klinik + lab aynı kaydı görür) | |
-| 4.2 | Uçtan uca şifreleme / KVKK uyumu | Hasta verisi |
-| 4.3 | Lab tarafında vaka kuyruğu | meshpack-lab |
-| 4.4 | Durum senkronu (alındı, üretimde, kargoda, tamam) | |
-| 4.5 | **Anlık mesajlaşma** (vaka bazlı chat) | WhatsApp yerine |
-| 4.6 | Dosya + mesaj + plan tek vakada | |
-| 4.7 | Bildirimler (yeni mesaj, yeni vaka) | |
+| # | Özellik | Durum | Not |
+|---|---------|-------|-----|
+| 4.0 | Supabase şema + RLS | ✅ | `supabase/migrations/` |
+| 4.1 | Ortak vaka ID (klinik + lab aynı kaydı görür) | ✅ Kısmen | `cloud_cases.id` = klinik `cases.id` |
+| 4.2 | Uçtan uca şifreleme / KVKK uyumu | 🔲 Kısmen | Bulut token şifreli kasa ✅; vaka E2E sıradaki |
+| 4.3 | Lab tarafında vaka kuyruğu | ✅ MVP | `meshpack-lab/` — kuyruk, ZIP, mesaj, durum |
+| 4.4 | Durum senkronu (alındı, üretimde, kargoda, tamam) | 🔲 Kısmen | `cloud_case_status` enum hazır |
+| 4.5 | **Anlık mesajlaşma** (vaka bazlı chat) | ✅ Kısmen | `case_messages` + Realtime |
+| 4.6 | Dosya + mesaj + plan tek vakada | ✅ Kısmen | Cloud upload + manifest |
+| 4.7 | Bildirimler (yeni mesaj, yeni vaka) | ✅ Kısmen | `notifications` + Realtime |
 
 ---
 
 ## Faz 5 — İyileştirmeler ve polish `SONRA`
 
-| # | Özellik |
-|---|---------|
-| 5.1 | Sidexis benzeri hasta listesi / detay UX iyileştirmeleri |
-| 5.2 | Açık/koyu tema, okunabilirlik |
-| 5.3 | Çoklu klinik / çoklu kullanıcı (ileride) |
-| 5.4 | Yedekleme ve hasta DB export |
+| # | Özellik | Durum | Not |
+|---|---------|-------|-----|
+| 5.1 | Sidexis benzeri hasta listesi / detay UX | ✅ Kısmen | Durum + vaka sütunu, sıralama, özet şerit |
+| 5.2 | Açık/koyu tema, okunabilirlik | ✅ Kısmen | Tema + density ayarlarda; sürekli iyileştirme |
+| 5.3 | Çoklu klinik / çoklu kullanıcı | ✅ Kısmen | Yerel kullanıcı + denetimde `user_name` |
+| 5.4 | Yedekleme ve hasta DB export | ✅ MVP | Ayarlar → Genel; İndirilenler/MeshPack/backups |
 
 ---
 
-## Benim önerdiğim ekler
+## Önerilen ekler — durum
 
-1. **Vaka numarası** — Her bağlanan ölçü setine okunabilir ID (`MP-2026-0042`). Lab ve chat bu ID üzerinden döner.
-2. **Ölçü kilidi + denetim kaydı** — Kim, ne zaman, hangi hastaya bağladı; yeniden atama denemesi loglanır.
-3. **Durum şeridi** — Her vakada görsel akış: `Bağlandı → Planlandı → Gönderildi → Lab’de`.
-4. **Akıllı hasta önerisi** — Grup düşünce “%90 Ahmet Yılmaz” (dosya öneki + geçmiş bağlantılar).
-5. **Offline kuyruk** — İnternet yokken gönderim sıraya alınır, gelince otomatik gider.
-6. **Annotation formatı** — 3B üzerindeki işaretler JSON olarak vakaya kaydedilir; lab viewer’da aynı görünür.
-7. **Dental chart veri modeli** — Önce basit (FDI diş no + işlem tipi); sonra materyal, renk, implant vb.
-8. **MeshPack-Lab protokolü önce** — Chat ve gönderimden önce ortak `CasePackage` formatı (STL/PLY + plan JSON + notlar).
+| # | Özellik | Durum |
+|---|---------|-------|
+| E1 | Vaka numarası (`MP-2026-0042`) | ✅ |
+| E2 | Ölçü kilidi + denetim kaydı (`audit_log`) | ✅ | Ayarlar → Günlük (birleşik `activity_log`) |
+| E3 | Durum şeridi (Bağlandı → … → Gönderildi) | ✅ Kısmen — vaka önizleme + planlama toolbar |
+| E4 | Akıllı hasta önerisi + öğrenen önek | ✅ MVP |
+| E5 | Offline gönderim kuyruğu | 🔲 |
+| E6 | Annotation formatı (JSON, lab viewer uyumu) | ✅ MVP (lab viewer yok) |
+| E7 | Dental chart veri modeli (genişletme) | 🔲 Kısmen — FDI + protez tipi; materyal/implant sonra |
+| E8 | MeshPack-Lab / `CasePackage` protokolü | ✅ Spec v1 — `docs/CASE_PACKAGE.md` + `manifest.json` |
 
 ---
 
@@ -130,69 +136,58 @@ Giriş yolları:
 | Konu | Karar |
 |------|--------|
 | Dental chart | **FDI (11–48)** |
-| MeshPack-Lab | Şu an **sadece vizyon** — önce klinik tarafı + `CasePackage` spec; lab uygulaması sonra |
-| Ölçü taşıma | **Varsayılan kilitli.** Sadece **yanlış eşleştirme** için eski hastadan ayır → yeni hastaya taşı. Tehlikeli işlem → sıkı UX + audit log |
-| Aynı gün ikinci ölçü | **Hekime sor:** “Mevcut vakaya ekle” mi, “Yeni vaka oluştur” mu? |
-| Gönderim (lab yokken) | **Drive = dosya**, **E-posta = bildirim / iş emri özeti** (birlikte) |
-| Planlama UI | **Ayrı tam ekran sayfa** — lab notu, chart, annotation **vaka bazlı**; inbox sadece eşleştirme + önizleme |
-
-### Planlama sayfası akışı (taslak)
-
-```
-[Inbox] Hasta + vaka seçildi
-        │
-        ▼
-[Planlama sayfası]  MP-2026-0042 · Yılmaz, Ahmet · 04.07.2026
-        │
-        ├─ Sol: vaka özeti + durum şeridi
-        ├─ Orta: lab notu, şablonlar, FDI chart (ileride)
-        ├─ Sağ: 3B önizleme + annotation (ileride)
-        └─ Alt: [Gönderime hazır işaretle] → [Özet / Gönder]
-```
-
-### Yanlış eşleştirme akışı (taslak)
-
-1. Kullanıcı “Eşleştirmeyi düzelt” der
-2. Uyarı: *“Bu ölçü [Hasta A]’ya bağlı. Taşımak lab kaydını etkileyebilir.”*
-3. Zorunlu **gerekçe** metni (ör. “Yanlış hasta seçildi”)
-4. Hedef hasta seçimi
-5. **Audit log:** kim, ne zaman, eski hasta → yeni hasta, gerekçe
-6. Gönderilmiş / planlanmış vakada ekstra onay katmanı (ileride)
-
-### Aynı gün ikinci ölçü akışı (taslak)
-
-Hasta zaten açık vakası varken yeni grup düşerse:
-
-```
-┌─────────────────────────────────────────┐
-│  Bu hasta için bugün zaten bir vaka var │
-│  (MP-2026-0042 · 3/3 set)               │
-│                                         │
-│  [ Mevcut vakaya ekle ]  [ Yeni vaka ]  │
-└─────────────────────────────────────────┘
-```
+| MeshPack-Lab | Şu an **sadece vizyon** — önce klinik tarafı + `CasePackage` spec |
+| Ölçü taşıma | **Varsayılan kilitli.** Sadece **yanlış eşleştirme** için reassign + audit |
+| Aynı gün ikinci ölçü | **Hekime sor** |
+| Gönderim (lab yokken) | **ZIP / Drive / e-posta** — bulut gerekmez |
+| Gönderim (MeshPack Lab) | **Bulut** — eşleştirme + şifreli iletişim (hedef) |
+| Bulut zorunluluğu | **Hayır** — yalnızca MeshPack Lab ortağı |
+| Yerel uygulama kilidi | **Doktor / Asistan + PIN** — denetimde kim yaptı kayıtlı |
+| Planlama UI | **Ayrı tam ekran sayfa** — inbox sadece eşleştirme + önizleme |
 
 ---
 
 ## Önerilen sıra (güncel)
 
 ```
-1. Vaka modeli + durum şeridi ✅
+1. Vaka modeli + durum pill ✅
 2. Ölçü kilidi + reassign + aynı gün sorusu ✅
-3. Eski ölçü backfill (case_id boş kayıtlar) ✅
-4. Planlama sayfası kabuğu (vaka bağlamı + lab notu → cases.lab_notes) ✅
-5. Dental chart MVP (FDI) — planlama sayfasında ✅
+3. Eski ölçü backfill ✅
+4. Planlama sayfası kabuğu ✅
+5. Dental chart MVP ✅
 6. 3B annotation ✅
-7. Gönderim özeti + Drive/E-posta (vaka bazlı) ✅
-8. CasePackage spec → MeshPack-Lab (vizyon)
+7. Gönderim özeti + Drive/mailto ✅
+8. Akıllı hasta önerisi + alias tablosu ✅
+9. Inbox footer + planlama şablonları + planlamaya geç banner ✅
+─── sıradaki ───
+10. Durum state machine polish (otomatik geçişler) ✅ kısmen
+11. E-posta ZIP + gönderim geçmişi UI ✅ kısmen
+─── sıradaki ───
+12. CasePackage spec + manifest export ✅
+─── sıradaki ───
+13. MeshPack Cloud (Supabase) iskelet ✅
+14. meshpack-lab uygulaması (cloud kuyruğu + mesaj) ✅ MVP
+15. Uçtan uca cloud test + klinik mesaj UI
 ```
+
+---
+
+## Açık borçlar (özet)
+
+| Öncelik | Madde | Açıklama |
+|---------|-------|----------|
+| **Şimdi** | Supabase projesi + migration | `.env` + seed org + giriş testi |
+| **Şimdi** | meshpack-lab MVP | ✅ Başladı — `meshpack-lab/` kuyruk + ZIP + mesaj |
+| **Şimdi** | Uçtan uca cloud testi | Klinik gönder → lab al |
+| Orta | Desktop bildirimleri | Tauri notification plugin |
+| Orta | Klinik–lab pairing UI | ✅ | Lab listesi + istek/onay + kod |
 
 ---
 
 ## Açık sorular
 
-- [x] Dental chart: FDI (11–48) — **evet**
-- [x] MeshPack-Lab durumu — **henüz hayal; spec önce**
-- [x] Gönderimde birincil kanal — **Lab yokken: Drive (dosya) + e-posta (özet/bildirim)**
-- [x] Ölçü unlink — **sadece yanlış eşleştirme; sıkı yönetim**
-- [x] Aynı gün ikinci ölçü — **hekime sor**
+- [x] Dental chart: FDI (11–48)
+- [x] MeshPack-Lab durumu — spec önce
+- [x] Gönderimde birincil kanal — Drive + e-posta özeti
+- [x] Ölçü unlink — sadece yanlış eşleştirme
+- [x] Aynı gün ikinci ölçü — hekime sor

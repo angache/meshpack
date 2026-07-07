@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { MeshViewer } from "./viewer.js";
 import { ScanSession } from "./scanSession.js";
 import { FileBrowser } from "./fileBrowser.js";
@@ -11,7 +10,7 @@ import {
   parsePatientName,
   SCAN_LABELS,
 } from "./utils.js";
-import { patientDisplayName } from "./patients.js";
+import { patientDisplayName, patientListLabel } from "./patients.js";
 import { identityTransformSet, matrixToArray } from "./alignment.js";
 import {
   applySettings,
@@ -22,21 +21,31 @@ import {
   settingsFromConfig,
   settingsToPayload,
 } from "./settings.js";
-import { initSettingsUI, loadSettingsIntoForm, updateDriveStatus } from "./settingsUI.js";
+import { initSettingsUI, loadSettingsIntoForm, updateDriveStatus, closeSettingsModal, openSettingsModal } from "./settingsUI.js";
+import { initAuditLogUI, refreshActivityLog } from "./auditLogUI.js";
+import { initDbBackupUI } from "./dbBackup.js";
+import { initSendHistoryUI, refreshSendHistory } from "./sendHistoryUI.js";
+import { initCloudUI, refreshCloudStatusUI } from "./cloud/cloudUI.js";
+import { migrateLegacyCloudSessions } from "./cloud/secureStorage.js";
+import { isCloudConfigured } from "./cloud/supabaseClient.js";
+import { initAppLock, initAppLockUI, refreshIdleTimeout } from "./appLock.js";
+import { initLocalUsersUI, refreshLocalUsersAdminUI } from "./localUsersUI.js";
 import { initCaseModals } from "./caseModals.js";
 import { initPlanningPage, openPlanning } from "./planningPage.js";
+import { initMessagesHub, refreshMessagesHubChrome } from "./messagesHubUI.js";
 import { t } from "./i18n.js";
 
 const statusBadge = document.getElementById("status-badge");
 const statusText = document.getElementById("status-text");
 const fileInfoBar = document.getElementById("file-info-bar");
 const viewerPlaceholder = document.getElementById("viewer-placeholder");
-const patientNameInput = document.getElementById("patient-name");
-const labNotesInput = document.getElementById("lab-notes");
-const btnUpload = document.getElementById("btn-upload");
 const btnAlign = document.getElementById("btn-align");
-const uploadStatus = document.getElementById("upload-status");
 const settingsModal = document.getElementById("settings-modal");
+
+const newScanBanner = document.getElementById("new-scan-banner");
+const newScanBannerText = document.getElementById("new-scan-banner-text");
+const planningPromptBanner = document.getElementById("planning-prompt-banner");
+const planningPromptText = document.getElementById("planning-prompt-text");
 
 const SLOT_IDS = { upper: "slot-upper", lower: "slot-lower", bite: "slot-bite" };
 const OVERLAY_SLOT_IDS = { upper: "overlay-slot-upper", lower: "overlay-slot-lower", bite: "overlay-slot-bite" };
@@ -68,9 +77,8 @@ function applyViewerSettings() {
 /** Yeni ölçü takibi — gönderimden sonra temizlenir */
 const newFilePaths = new Set();
 let lastNewScan = null; // { path, filename, suggestedName, scanType }
+let planningPrompt = null; // { patient, scanSession }
 
-const newScanBanner = document.getElementById("new-scan-banner");
-const newScanBannerText = document.getElementById("new-scan-banner-text");
 const viewerSlot = document.getElementById("viewer-slot");
 const viewerContainer = document.getElementById("viewer-container");
 const previewOverlay = document.getElementById("preview-overlay");
@@ -87,7 +95,11 @@ function initFileBrowser() {
     onPatientSelect: (patient, scanSession) => selectPatient(patient, scanSession),
     onSessionSelect: (patient, scanSession) => selectPatient(patient, scanSession),
     onPatientUpdated: (patient) => syncPatientToForm(patient),
-    onOpenPlanning: (patient, scanSession) => openPlanning(patient, scanSession),
+    onOpenPlanning: (patient, scanSession) => {
+      hidePlanningPrompt();
+      openPlanning(patient, scanSession);
+    },
+    onCaseLinked: (patient, scanSession) => showPlanningPrompt(patient, scanSession),
     onToggleScan: (type) => toggleScanVisibility(type),
     getSessionPaths: () => session.getAllScans().map((s) => s.path),
     getSessionPatientKey: () => session.patientKey,
@@ -98,10 +110,7 @@ function initFileBrowser() {
 
 function syncPatientToForm(patient) {
   if (!patient || session.patientKey !== patient.id) return;
-  const name = patientDisplayName(patient);
-  session.patientName = name;
-  patientNameInput.value = name;
-  if (patient.notes) labNotesInput.value = patient.notes;
+  session.patientName = patientDisplayName(patient);
 }
 
 function markNewScan({ path, filename, suggestedName, scanType }) {
@@ -133,8 +142,33 @@ function updateNewScanBanner() {
     return;
   }
   const typeLabel = SCAN_LABELS[lastNewScan.scanType] || "Tarama";
-  newScanBannerText.textContent = `Yeni ölçü: ${lastNewScan.suggestedName} — ${typeLabel} (eşleştirmeyi bekliyor)`;
+  let text = `Yeni ölçü: ${lastNewScan.suggestedName} — ${typeLabel} (eşleştirmeyi bekliyor)`;
+  const suggestion = fileBrowser?.getSuggestionForPath?.(lastNewScan.path);
+  if (suggestion) {
+    text += ` · Öneri: ${suggestion.label} (${suggestion.score}%)`;
+  }
+  newScanBannerText.textContent = text;
   newScanBanner.classList.remove("hidden");
+}
+
+function showPlanningPrompt(patient, scanSession) {
+  if (!patient || !scanSession?.caseId) return;
+  planningPrompt = { patient, scanSession };
+  const label = patientListLabel(patient);
+  const caseNum = scanSession.caseNumber || "vaka";
+  planningPromptText.textContent = `${label} — ${caseNum} bağlandı. İş emrini hazırlayın.`;
+  planningPromptBanner?.classList.remove("hidden");
+}
+
+function hidePlanningPrompt() {
+  planningPrompt = null;
+  planningPromptBanner?.classList.add("hidden");
+}
+
+function gotoPlanningPrompt() {
+  if (!planningPrompt) return;
+  openPlanning(planningPrompt.patient, planningPrompt.scanSession);
+  hidePlanningPrompt();
 }
 
 async function gotoNewScan() {
@@ -224,15 +258,6 @@ function acceptScannerAlignment() {
   if (!viewer.hasMesh("upper") || !viewer.hasMesh("lower") || !viewer.hasMesh("bite")) return;
   viewer.aligned = true;
   markSessionAligned(identityTransformSet(), { fromScanner: true });
-  maybeAutoUpload();
-}
-
-async function maybeAutoUpload() {
-  const s = getSettings();
-  if (!s.auto_upload || !session.isComplete() || !session.aligned) return;
-  if (!patientNameInput.value.trim()) return;
-  if (btnUpload.disabled) return;
-  await performUpload();
 }
 
 function resetAlignButton() {
@@ -246,8 +271,6 @@ function clearPatientData() {
   session.reset();
   viewer.clearAll();
   visibility = getDefaultVisibility();
-  patientNameInput.value = "";
-  labNotesInput.value = "";
   resetAlignButton();
   viewerPlaceholder.classList.remove("hidden");
   updateScanSlots();
@@ -306,7 +329,6 @@ function updateScanSlots() {
       "mp-btn-secondary w-full px-2 py-1.5 rounded-lg text-[10px] font-medium ready border";
   }
 
-  btnUpload.disabled = session.getCompletedCount() === 0;
   updateOverlayScanToggles();
   fileBrowser?.render();
 }
@@ -375,8 +397,6 @@ async function selectPatient(patient, scanSession = null) {
   session.patientName = displayName;
   session.scanSessionId = activeSession?.id || null;
   session.lastActivity = Date.now();
-  patientNameInput.value = displayName;
-  if (patient.notes) labNotesInput.value = patient.notes;
 
   if (fileBrowser) {
     fileBrowser.selectedSessionId = activeSession?.id || null;
@@ -434,6 +454,7 @@ async function addScanFromWatcher({ path, filename, size_bytes }) {
   });
 
   await fileBrowser?.refresh();
+  updateNewScanBanner();
 
   const link = fileBrowser?.scanLinks.get(path);
   if (link && session.patientKey === link.patient_id) {
@@ -507,15 +528,6 @@ async function runIcpAlign() {
   }
 }
 
-document.querySelectorAll(".template-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const text = btn.dataset.template;
-    const current = labNotesInput.value;
-    labNotesInput.value = current ? `${current}, ${text}` : text;
-    labNotesInput.focus();
-  });
-});
-
 const appWindow = getCurrentWindow();
 
 async function toggleFullscreen() {
@@ -534,61 +546,9 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-async function performUpload() {
-  const scans = session.getAllScans();
-  if (scans.length === 0) return;
-
-  const patientName = patientNameInput.value.trim();
-  if (!patientName) {
-    alert("Lütfen hasta adını girin.");
-    patientNameInput.focus();
-    return;
-  }
-
-  if (session.isComplete() && !session.aligned) {
-    const proceed = confirm(
-      "Üç tarama tamamlandı ancak hizalama onaylanmadı. Yine de yüklemek istiyor musunuz?"
-    );
-    if (!proceed) return;
-  }
-
-  btnUpload.disabled = true;
-  btnUpload.textContent = "⏳ Sıkıştırılıyor ve yükleniyor...";
-  uploadStatus.classList.remove("hidden");
-  uploadStatus.textContent = "ZIP oluşturuluyor...";
-
-  try {
-    const filePaths = scans.map((s) => s.path);
-    const link = await invoke("compress_and_upload", {
-      filePaths,
-      patientName,
-      notes: labNotesInput.value.trim(),
-      alignment: session.transforms,
-    });
-
-    uploadStatus.textContent = "✅ Yükleme tamamlandı! Link panoya kopyalandı.";
-    uploadStatus.className = "text-xs text-center text-medical-green mt-2";
-    await writeText(link);
-    btnUpload.textContent = "✅ Yüklendi — Link Kopyalandı";
-
-    const uploadedPaths = session.getAllScans().map((s) => s.path);
-    clearNewForPaths(uploadedPaths);
-
-    clearPatientData();
-    await fileBrowser?.refresh();
-  } catch (err) {
-    uploadStatus.textContent = `❌ Hata: ${err}`;
-    uploadStatus.className = "text-xs text-center text-red-400 mt-2";
-    btnUpload.disabled = false;
-    btnUpload.textContent = `🚀 ${t("upload_btn")}`;
-  }
-}
-
-patientNameInput.addEventListener("change", () => {
-  session.patientName = patientNameInput.value.trim();
-});
-
-btnUpload.addEventListener("click", () => performUpload());
+document.getElementById("btn-goto-planning")?.addEventListener("click", () => gotoPlanningPrompt());
+document.getElementById("btn-dismiss-planning-prompt")?.addEventListener("click", () => hidePlanningPrompt());
+document.getElementById("main-cloud-badge")?.addEventListener("click", () => openSettingsModal("cloud"));
 
 async function saveSettingsToBackend(payload) {
   const saved = await invoke("save_settings", { settings: payload });
@@ -614,11 +574,33 @@ initSettingsUI({
     }
   },
   onIcpAlign: runIcpAlign,
+  onTabSwitch: (tab) => {
+    if (tab === "audit") refreshActivityLog();
+    if (tab === "upload") refreshSendHistory();
+    if (tab === "cloud") refreshCloudStatusUI();
+    if (tab === "general") refreshLocalUsersAdminUI();
+  },
 });
+
+initAppLockUI();
+initLocalUsersUI();
+
+if (isCloudConfigured()) {
+  migrateLegacyCloudSessions().catch(() => {});
+}
+initCloudUI();
+initMessagesHub({
+  getFileBrowser: () => fileBrowser,
+  openPlanning,
+});
+
+initAuditLogUI();
+initDbBackupUI();
 
 onSettingsChange(() => {
   applyViewerSettings();
   applySettings();
+  refreshIdleTimeout();
 });
 
 async function init() {
@@ -634,6 +616,17 @@ async function init() {
     },
   });
   initFileBrowser();
+  initSendHistoryUI({
+    onOpenCase: async (entry) => {
+      closeSettingsModal();
+      await fileBrowser?.refresh();
+      const patient = fileBrowser?.patients.find((p) => p.id === entry.patient_id);
+      if (!patient) return;
+      fileBrowser.openPatient(patient, entry.id);
+      const session = fileBrowser.getActiveScanSession();
+      if (session?.caseId) openPlanning(patient, session);
+    },
+  });
   applyViewerSettings();
   updateScanSlots();
 
@@ -658,4 +651,9 @@ async function init() {
   }
 }
 
-init();
+async function boot() {
+  await initAppLock();
+  await init();
+}
+
+boot();

@@ -10,10 +10,12 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
     "@tauri-apps/api": "^2.2.0",
-    "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-shell": "^2.2.0",
+    "jszip": "^3.10.1",
     "three": "^0.172.0"
   },
   "devDependencies": {

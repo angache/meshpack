@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "MeshPack Lab default capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:default",
+    "dialog:default",
+    "allow-write-file-bytes"
+  ]
+}

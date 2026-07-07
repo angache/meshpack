@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="tr" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MeshPack Lab</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="h-screen w-screen overflow-hidden select-none">
+    <div id="app" class="h-full flex flex-col">
+      <!-- Auth -->
+      <div id="auth-screen" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="auth-card w-full max-w-md rounded-xl border border-lab-border bg-lab-surface p-6 shadow-lg">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 rounded-lg bg-lab-accent/20 flex items-center justify-center text-xl">🔬</div>
+            <div>
+              <h1 class="text-lg font-semibold text-lab-text">MeshPack Lab</h1>
+              <p class="text-xs text-lab-muted">Laboratuvar vaka kuyruğu</p>
+            </div>
+          </div>
+
+          <div id="auth-not-configured" class="hidden text-sm text-lab-orange mb-4">
+            Supabase yapılandırılmamış. <code class="text-xs">meshpack-lab/.env</code> dosyasını oluşturun.
+          </div>
+
+          <div id="auth-error" class="hidden text-xs mb-3 px-3 py-2 rounded-lg border"></div>
+
+          <div id="auth-tabs" class="flex gap-1 mb-4 p-1 rounded-lg bg-lab-elevated">
+            <button type="button" data-auth-tab="login" class="auth-tab is-active flex-1 text-xs py-1.5 rounded-md">Giriş</button>
+            <button type="button" data-auth-tab="signup" class="auth-tab flex-1 text-xs py-1.5 rounded-md">Kayıt</button>
+          </div>
+
+          <div id="auth-login">
+            <label class="field-label">E-posta</label>
+            <input id="login-email" type="email" class="field-input mb-3" autocomplete="username" />
+            <label class="field-label">Şifre</label>
+            <input id="login-password" type="password" class="field-input mb-4" autocomplete="current-password" />
+            <button id="btn-login" type="button" class="btn-primary w-full">Giriş yap</button>
+          </div>
+
+          <div id="auth-signup" class="hidden">
+            <label class="field-label">Laboratuvar adı</label>
+            <input id="signup-org-name" type="text" class="field-input mb-3" placeholder="Örn. ABC Dental Lab" />
+            <label class="field-label">E-posta</label>
+            <input id="signup-email" type="email" class="field-input mb-3" autocomplete="username" />
+            <label class="field-label">Şifre</label>
+            <input id="signup-password" type="password" class="field-input mb-4" autocomplete="new-password" />
+            <button id="btn-signup" type="button" class="btn-primary w-full">Lab hesabı oluştur</button>
+          </div>
+
+          <div id="auth-org-setup" class="hidden mt-4 pt-4 border-t border-lab-border">
+            <p class="text-xs text-lab-muted mb-3">Organizasyon kurulumu gerekli</p>
+            <label class="field-label">Laboratuvar adı</label>
+            <input id="setup-org-name" type="text" class="field-input mb-3" />
+            <button id="btn-setup-org" type="button" class="btn-primary w-full">Organizasyon oluştur</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main -->
+      <div id="main-screen" class="hidden flex-1 flex flex-col min-h-0">
+        <header class="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-lab-border bg-lab-surface">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-lab-accent/20 flex items-center justify-center">🔬</div>
+            <div>
+              <div class="text-sm font-semibold text-lab-text">MeshPack Lab</div>
+              <div id="header-org" class="text-[10px] text-lab-muted"></div>
+            </div>
+            <nav class="flex gap-1 ml-2 p-0.5 rounded-lg bg-lab-elevated">
+              <button type="button" data-main-tab="queue" class="main-tab is-active text-[10px] px-2.5 py-1 rounded-md">Vaka kuyruğu</button>
+              <button type="button" data-main-tab="messages" class="main-tab text-[10px] px-2.5 py-1 rounded-md relative">
+                Mesajlar
+                <span id="header-messages-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full text-[9px] font-medium bg-lab-orange text-white flex items-center justify-center">0</span>
+              </button>
+            </nav>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="btn-open-links" type="button" class="btn-ghost text-xs relative">
+              Klinikler
+              <span id="links-badge" class="hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-lab-orange"></span>
+            </button>
+            <div id="pairing-code-box" class="hidden items-center gap-2 text-xs">
+              <span class="text-lab-muted">Eşleştirme kodu:</span>
+              <code id="pairing-code" class="px-2 py-0.5 rounded bg-lab-elevated text-lab-accent font-mono"></code>
+              <button id="btn-copy-code" type="button" class="btn-ghost text-[10px]">Kopyala</button>
+            </div>
+            <span id="header-email" class="text-[10px] text-lab-muted"></span>
+            <button id="btn-sign-out" type="button" class="btn-ghost text-xs">Çıkış</button>
+          </div>
+        </header>
+
+        <div id="realtime-banner" class="hidden shrink-0 px-4 py-2 text-xs border-b border-lab-border bg-lab-accent/12 text-lab-text"></div>
+
+        <div id="links-incoming-banner" class="hidden shrink-0 px-4 py-2 text-xs text-lab-orange bg-lab-orange/10 border-b border-lab-border"></div>
+
+        <div id="queue-screen" class="flex-1 flex min-h-0">
+          <!-- Queue -->
+          <aside class="w-80 shrink-0 flex flex-col border-r border-lab-border bg-lab-bg">
+            <div class="p-3 border-b border-lab-border">
+              <div class="text-xs font-medium text-lab-text mb-2 flex items-center gap-2">
+                Vaka kuyruğu
+                <span id="queue-unread-badge" class="hidden px-1.5 py-0.5 rounded-full text-[10px] bg-lab-orange/20 text-lab-orange border border-lab-orange/35">0 yeni</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 mb-2">
+                <select id="queue-sort" class="field-input text-xs">
+                  <option value="sent_desc">En yeni</option>
+                  <option value="sent_asc">En eski</option>
+                  <option value="status">Duruma göre</option>
+                </select>
+                <select id="status-filter" class="field-input text-xs">
+                  <option value="all">Tümü</option>
+                  <option value="sent">Gönderildi</option>
+                  <option value="received">Alındı</option>
+                  <option value="in_production">Üretimde</option>
+                  <option value="quality_check">Kalite kontrol</option>
+                  <option value="shipped">Kargoda</option>
+                  <option value="completed">Tamamlandı</option>
+                  <option value="cancelled">İptal</option>
+                </select>
+              </div>
+            </div>
+            <div id="queue-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+            <div id="queue-empty" class="hidden p-4 text-center text-xs text-lab-muted">
+              Henüz vaka yok. Klinikten MeshPack Cloud ile gönderim bekleniyor.
+            </div>
+          </aside>
+
+          <!-- Detail -->
+          <main id="case-detail" class="flex-1 flex flex-col min-h-0 bg-lab-surface">
+            <div id="detail-empty" class="flex-1 flex items-center justify-center text-sm text-lab-muted">
+              Soldan bir vaka seçin
+            </div>
+            <div id="detail-content" class="hidden flex-1 flex flex-col min-h-0">
+              <div class="shrink-0 p-4 border-b border-lab-border">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <div class="flex items-center gap-2 mb-1">
+                      <span id="detail-case-number" class="text-base font-semibold text-lab-text"></span>
+                      <span id="detail-status-badge" class="status-badge"></span>
+                    </div>
+                    <div id="detail-patient" class="text-sm text-lab-text"></div>
+                    <div id="detail-meta" class="text-[10px] text-lab-muted mt-1"></div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <select id="detail-status-select" class="field-input text-xs"></select>
+                    <button id="btn-download" type="button" class="btn-primary text-xs">ZIP indir</button>
+                  </div>
+                </div>
+                <div id="detail-quick-status" class="mt-3 flex flex-wrap gap-1.5">
+                  <button type="button" class="btn-ghost text-[10px]" data-quick-status="received">Alındı</button>
+                  <button type="button" class="btn-ghost text-[10px]" data-quick-status="in_production">Üretimde</button>
+                  <button type="button" class="btn-ghost text-[10px]" data-quick-status="quality_check">Kalite kontrol</button>
+                  <button type="button" class="btn-ghost text-[10px]" data-quick-status="shipped">Kargoda</button>
+                  <button type="button" class="btn-ghost text-[10px]" data-quick-status="completed">Tamamlandı</button>
+                </div>
+              </div>
+
+              <div class="flex-1 flex min-h-0">
+                <div class="flex-1 overflow-y-auto p-4 space-y-4 min-w-0">
+                  <section>
+                    <h3 class="section-title">Ölçü önizleme</h3>
+                    <div id="detail-preview-host" class="rounded-lg border border-lab-border bg-[#161b22] overflow-hidden">
+                      <canvas id="detail-preview-canvas" class="w-full h-[260px] block"></canvas>
+                      <div id="detail-preview-toggles" class="hidden flex flex-wrap gap-1.5 px-3 py-2 border-t border-lab-border">
+                        <button type="button" class="preview-toggle-btn" data-preview-toggle="upper">Üst çene</button>
+                        <button type="button" class="preview-toggle-btn" data-preview-toggle="lower">Alt çene</button>
+                        <button type="button" class="preview-toggle-btn" data-preview-toggle="bite">Kapanış</button>
+                      </div>
+                      <div id="detail-preview-empty" class="text-[11px] text-lab-muted px-3 py-2 border-t border-lab-border">
+                        Önizleme hazırlanıyor…
+                      </div>
+                      <pre id="detail-preview-debug" class="hidden text-[10px] text-lab-orange px-3 py-2 border-t border-lab-border whitespace-pre-wrap break-all"></pre>
+                    </div>
+                  </section>
+                  <section>
+                    <h3 class="section-title">Lab notu</h3>
+                    <p id="detail-lab-notes" class="text-sm text-lab-text whitespace-pre-wrap"></p>
+                  </section>
+                  <section>
+                    <h3 class="section-title">İş emri özeti</h3>
+                    <pre id="detail-summary" class="text-[11px] text-lab-text whitespace-pre-wrap rounded-lg border border-lab-border bg-lab-elevated/40 p-2.5">—</pre>
+                  </section>
+                  <section class="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 class="section-title">Diş rengi</h3>
+                      <p id="detail-shade" class="text-sm text-lab-text"></p>
+                    </div>
+                    <div>
+                      <h3 class="section-title">Paket</h3>
+                      <p id="detail-package" class="text-sm text-lab-text"></p>
+                    </div>
+                  </section>
+                  <section>
+                    <h3 class="section-title">Dental plan</h3>
+                    <p id="detail-plan" class="text-sm text-lab-text"></p>
+                  </section>
+                  <section>
+                    <h3 class="section-title">Ölçü üzeri notlar</h3>
+                    <div id="detail-annotations" class="space-y-1.5"></div>
+                  </section>
+                  <section>
+                    <h3 class="section-title">Durum zaman çizgisi</h3>
+                    <div id="detail-timeline" class="space-y-1.5"></div>
+                  </section>
+                </div>
+
+                <div class="w-80 shrink-0 flex flex-col border-l border-lab-border bg-lab-bg">
+                  <div class="p-3 border-b border-lab-border text-xs font-medium text-lab-text flex items-center gap-2">
+                    Mesajlar
+                    <span id="messages-unread-badge" class="hidden px-1.5 py-0.5 rounded-full text-[10px] bg-lab-accent/20 text-lab-accent border border-lab-accent/35">0 okunmadı</span>
+                  </div>
+                  <div id="messages-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+                  <div class="p-3 border-t border-lab-border flex gap-2">
+                    <input id="message-input" type="text" class="field-input text-xs flex-1" placeholder="Kliniğe mesaj…" />
+                    <button id="btn-send-message" type="button" class="btn-primary text-xs shrink-0">Gönder</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <div id="messages-screen" class="hidden flex-1 flex min-h-0 flex-col">
+          <div class="shrink-0 flex items-center justify-between px-4 py-2 border-b border-lab-border bg-lab-surface">
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-semibold text-lab-text m-0">Mesajlar</h2>
+            </div>
+            <button id="btn-hub-mark-all-read" type="button" class="btn-ghost text-[10px]">Tümünü okundu işaretle</button>
+          </div>
+          <div class="flex flex-1 min-h-0">
+            <aside class="w-80 shrink-0 flex flex-col min-h-0 border-r border-lab-border bg-lab-bg">
+              <div class="p-3 border-b border-lab-border">
+                <input id="hub-thread-search" type="search" class="field-input text-xs w-full" placeholder="Vaka veya hasta ara…" />
+              </div>
+              <div id="hub-thread-list" class="flex-1 overflow-y-auto"></div>
+            </aside>
+            <main class="flex-1 flex flex-col min-h-0 min-w-0 bg-lab-surface">
+              <div id="hub-chat-empty" class="flex-1 flex items-center justify-center text-sm text-lab-muted">
+                Soldan bir konuşma seçin
+              </div>
+              <div id="hub-chat-active" class="hidden flex-1 flex flex-col min-h-0">
+                <div class="shrink-0 px-4 py-3 border-b border-lab-border">
+                  <div id="hub-chat-title" class="text-sm font-semibold text-lab-text"></div>
+                  <div id="hub-chat-subtitle" class="text-[10px] text-lab-muted mt-0.5"></div>
+                  <button id="btn-hub-open-case" type="button" class="btn-secondary text-[10px] px-2 py-1 rounded mt-2">Vakaya git</button>
+                </div>
+                <div id="hub-messages-list" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+                <div class="shrink-0 p-3 border-t border-lab-border flex gap-2">
+                  <input id="hub-message-input" type="text" class="field-input text-xs flex-1" placeholder="Kliniğe mesaj…" />
+                  <button id="btn-hub-send-message" type="button" class="btn-primary text-xs shrink-0">Gönder</button>
+                </div>
+              </div>
+            </main>
+            <aside class="w-72 shrink-0 flex flex-col min-h-0 border-l border-lab-border bg-lab-bg">
+              <div class="p-3 border-b border-lab-border flex items-center justify-between gap-2">
+                <span class="text-xs font-medium text-lab-text">Bildirimler</span>
+                <span id="hub-notifications-count" class="hidden hub-badge">0</span>
+              </div>
+              <div id="hub-notifications-list" class="flex-1 overflow-y-auto p-2"></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- Klinik bağlantıları paneli -->
+      <div id="links-panel" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="w-full max-w-md rounded-xl border border-lab-border bg-lab-surface shadow-xl max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-lab-border">
+            <h2 class="text-sm font-semibold text-lab-text">Klinik bağlantıları</h2>
+            <button id="btn-close-links" type="button" class="btn-ghost text-xs">Kapat</button>
+          </div>
+          <div class="p-4 overflow-y-auto flex-1 space-y-3">
+            <div class="flex gap-1 p-1 rounded-lg bg-lab-elevated">
+              <button type="button" data-links-tab="mine" class="auth-tab is-active flex-1 text-[10px] py-1">Kliniklerim</button>
+              <button type="button" data-links-tab="search" class="auth-tab flex-1 text-[10px] py-1">Ara</button>
+              <button type="button" data-links-tab="code" class="auth-tab flex-1 text-[10px] py-1">Kod ile</button>
+            </div>
+            <div id="links-tab-mine" class="space-y-2">
+              <div id="links-incoming" class="space-y-1.5"></div>
+              <div id="links-list" class="space-y-1.5"></div>
+            </div>
+            <div id="links-tab-search" class="hidden space-y-2">
+              <div class="flex gap-2">
+                <input id="links-clinic-search" type="text" class="field-input text-xs flex-1" placeholder="Klinik adı…" />
+                <button id="btn-links-search" type="button" class="btn-primary text-[10px] px-2">Ara</button>
+              </div>
+              <div id="links-search-results" class="space-y-1.5"></div>
+            </div>
+            <div id="links-tab-code" class="hidden space-y-2">
+              <input id="links-clinic-code" type="text" class="field-input font-mono uppercase" placeholder="KLİNİK KODU" />
+              <input id="links-clinic-note" type="text" class="field-input text-xs" placeholder="Not (opsiyonel)" />
+              <button id="btn-links-request-code" type="button" class="btn-primary text-xs w-full">İstek gönder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

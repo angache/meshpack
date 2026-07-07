@@ -144,6 +144,7 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
     plan: parseDentalPlan(plan),
     selected: null,
     activeTreatment: defaultActiveTreatmentId(catalog),
+    readOnly: false,
   };
 
   function emitChange() {
@@ -227,6 +228,7 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
 
     root.querySelectorAll("[data-pick-treatment]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (state.readOnly) return;
         state.activeTreatment = btn.dataset.pickTreatment;
         render();
       });
@@ -234,6 +236,7 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
 
     root.querySelectorAll("[data-tooth]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
+        if (state.readOnly) return;
         const tooth = btn.dataset.tooth;
         if (e.shiftKey) {
           delete state.plan.teeth[tooth];
@@ -255,6 +258,7 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
 
     root.querySelectorAll("[data-remove-tooth]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
+        if (state.readOnly) return;
         e.stopPropagation();
         delete state.plan.teeth[btn.dataset.removeTooth];
         emitChange();
@@ -263,6 +267,7 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
     });
 
     root.querySelector("[data-action='clear-all']")?.addEventListener("click", () => {
+      if (state.readOnly) return;
       if (!confirm("Tüm diş planı silinsin mi?")) return;
       state.plan = emptyDentalPlan();
       state.selected = null;
@@ -288,6 +293,11 @@ export function createDentalChart(root, { plan = emptyDentalPlan(), onChange, tr
       if (!catalog.some((t) => t.id === state.activeTreatment)) {
         state.activeTreatment = defaultActiveTreatmentId(catalog);
       }
+      render();
+    },
+    setReadOnly(readonly) {
+      state.readOnly = !!readonly;
+      root.classList.toggle("fdi-chart-readonly", state.readOnly);
       render();
     },
   };

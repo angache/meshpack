@@ -26,6 +26,10 @@ export async function updateCaseLabNotes(caseId, labNotes) {
   return invoke("update_case_lab_notes", { caseId, labNotes });
 }
 
+export async function beginCasePlanning(caseId) {
+  return invoke("begin_case_planning", { caseId });
+}
+
 export async function updateCaseStatus(caseId, status) {
   return invoke("update_case_status", { caseId, status });
 }
@@ -36,6 +40,10 @@ export async function createCase(patientId, sessionDay) {
 
 export async function findCaseForDay(patientId, sessionDay) {
   return invoke("find_case_for_day", { patientId, sessionDay });
+}
+
+export async function listSentCases(limit = 50) {
+  return invoke("list_sent_cases", { limit });
 }
 
 export async function listPatientCases(patientId) {

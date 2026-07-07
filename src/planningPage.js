@@ -1,11 +1,22 @@
 import {
-  caseStatusMeta,
   detachScan,
   getCase,
+  beginCasePlanning,
   updateCasePlanning,
   updateCaseStatus,
 } from "./cases.js";
+import {
+  displayCaseStatus,
+  hasPlanningContent,
+  isPlanningReadOnly,
+  planningActionLabel,
+} from "./casePlanning.js";
 import { buildCaseSummary, buildMailtoLink, buildUploadPatientName } from "./caseSummary.js";
+import {
+  buildCasePackageManifest,
+  CASE_PACKAGE_VERSION,
+  serializeCasePackageManifest,
+} from "./casePackage.js";
 import { createDentalChart, parseDentalPlan, serializeDentalPlan } from "./dentalChart.js";
 import { patientListLabel } from "./patients.js";
 import { SCAN_LABELS, formatFileSize } from "./utils.js";
@@ -14,6 +25,17 @@ import { MeshViewer } from "./viewer.js";
 import { AnnotationLayer } from "./annotationLayer.js";
 import { parseAnnotations, serializeAnnotations } from "./annotations.js";
 import { getDefaultVisibility, getDentalTreatments, getSettings, hexToNumber, onSettingsChange } from "./settings.js";
+import { LAB_NOTE_TEMPLATES, appendLabNoteTemplate } from "./config/labNoteTemplates.js";
+import { renderCaseStatusSteps } from "./caseStatusSteps.js";
+import { evaluateCaseReadiness, formatReadinessAlert } from "./caseReadiness.js";
+import { canSendViaMeshPackLab } from "./cloud/cloudUI.js";
+import { uploadCaseToCloud } from "./cloud/cases.js";
+import {
+  bindPlanningCaseMessages,
+  closePlanningCaseMessages,
+  openPlanningCaseMessages,
+} from "./planningCaseMessages.js";
+import { logActivity } from "./activityLog.js";
 import {
   VITA_CLASSICAL,
   VITA_3D_MASTER,
@@ -36,6 +58,15 @@ let annotateMode = false;
 /** @type {{ scanType: string, position: number[], normal: number[] } | null} */
 let pendingHit = null;
 let shadeSelectorsReady = false;
+let meshPackLabSendEnabled = false;
+
+async function refreshMeshPackLabSendState() {
+  try {
+    meshPackLabSendEnabled = await canSendViaMeshPackLab();
+  } catch {
+    meshPackLabSendEnabled = false;
+  }
+}
 
 function initShadeSelectors() {
   if (shadeSelectorsReady) return;
@@ -223,6 +254,97 @@ function getSummaryInput() {
   };
 }
 
+function getReadinessInput() {
+  if (!context) return null;
+  return {
+    scans: context.scanSession?.scans || {},
+    labNotes: el("planning-lab-notes")?.value ?? "",
+    toothShade: getToothShade(),
+    dentalPlanRaw: serializeDentalPlan(dentalChart?.getPlan() || emptyPlan()),
+  };
+}
+
+function renderReadinessChecklist() {
+  const container = el("planning-readiness");
+  if (!container || !context) {
+    if (container) container.innerHTML = "";
+    return null;
+  }
+
+  if (context.caseRow.status === "sent") {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    return null;
+  }
+
+  const { ready, checks } = evaluateCaseReadiness(getReadinessInput());
+  container.classList.remove("hidden");
+  container.classList.toggle("is-ready", ready && context.caseRow.status !== "ready_to_send");
+
+  const items = checks
+    .map(
+      (c) =>
+        `<li class="planning-readiness-item ${c.ok ? "is-ok" : "is-pending"}">
+          <span class="planning-readiness-icon">${c.ok ? "✓" : "○"}</span>
+          <span>${c.label}</span>
+        </li>`
+    )
+    .join("");
+
+  const hint =
+    ready && context.caseRow.status === "planning"
+      ? `<p class="planning-readiness-hint">Tüm maddeler tamam — gönderime hazır işaretleyebilir veya doğrudan gönderebilirsiniz.</p>`
+      : ready && context.caseRow.status === "ready_to_send"
+        ? `<p class="planning-readiness-hint is-ok">Gönderime hazır.</p>`
+        : "";
+
+  container.innerHTML = `
+    <h3 class="planning-readiness-title">Gönderim kontrol listesi</h3>
+    <ul class="planning-readiness-list">${items}</ul>
+    ${hint}`;
+
+  const readyBtn = el("btn-planning-ready");
+  if (readyBtn && context.caseRow.status !== "ready_to_send") {
+    readyBtn.classList.toggle("is-highlight", ready);
+  } else if (readyBtn) {
+    readyBtn.classList.remove("is-highlight");
+  }
+
+  return { ready, checks };
+}
+
+async function ensureReadyForSend({ autoMark = false } = {}) {
+  if (!context || context.caseRow.status === "sent") return false;
+
+  await savePlanning();
+  const { ready, checks } = evaluateCaseReadiness(getReadinessInput());
+  renderReadinessChecklist();
+
+  if (!ready) {
+    alert(formatReadinessAlert(checks));
+    return false;
+  }
+
+  if (
+    autoMark &&
+    context.caseRow.status !== "ready_to_send" &&
+    context.caseRow.status !== "sent"
+  ) {
+    try {
+      const updated = await updateCaseStatus(context.caseRow.id, "ready_to_send");
+      context.caseRow = updated;
+      renderHeader(updated, context.patient);
+      renderReadinessChecklist();
+      await onDataChange?.();
+    } catch (err) {
+      alert(`Durum güncellenemedi: ${err}`);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function renderSendSummary() {
   const pre = el("planning-send-summary");
   if (!pre || !context) {
@@ -232,12 +354,21 @@ function renderSendSummary() {
   pre.textContent = buildCaseSummary(getSummaryInput());
 
   const uploadBtn = el("btn-planning-upload");
+  const cloudBtn = el("btn-planning-cloud");
   const scans = context.scanSession?.scans || {};
   const hasFiles = ["upper", "lower", "bite"].some((t) => scans[t]);
+
+  if (cloudBtn) {
+    cloudBtn.classList.toggle("hidden", !meshPackLabSendEnabled);
+    cloudBtn.disabled = !hasFiles || context.caseRow.status === "sent";
+    cloudBtn.textContent = context.caseRow.status === "sent" ? "✓ Lab'a gönderildi" : "MeshPack Lab'a gönder";
+  }
   if (uploadBtn) {
     uploadBtn.disabled = !hasFiles || context.caseRow.status === "sent";
     uploadBtn.textContent = context.caseRow.status === "sent" ? "✓ Gönderildi" : "Drive'a yükle";
   }
+
+  renderReadinessChecklist();
 }
 
 function setSendStatus(message, type = "") {
@@ -263,29 +394,164 @@ async function copySendSummary() {
   }
 }
 
-function emailSendSummary() {
-  if (!context) return;
-  const summary = buildCaseSummary(getSummaryInput());
-  window.location.href = buildMailtoLink(summary, context.caseRow);
-  setSendStatus("E-posta uygulamanız açılıyor…", "ok");
+function getPackageExportPayload() {
+  const input = getSummaryInput();
+  const summary = buildCaseSummary(input);
+  const manifest = serializeCasePackageManifest(buildCasePackageManifest({ ...input, summaryText: summary }));
+  return { summary, manifest };
 }
 
-async function uploadCaseToDrive() {
-  if (!context || context.caseRow.status === "sent") return;
+async function exportCasePackageZip() {
+  if (!context) return null;
 
   const scans = context.scanSession?.scans || {};
   const filePaths = ["upper", "lower", "bite"].map((t) => scans[t]?.path).filter(Boolean);
   if (!filePaths.length) {
     alert("Bu vakaya bağlı ölçü dosyası yok.");
-    return;
+    return null;
   }
+
+  await savePlanning();
+  const { summary, manifest } = getPackageExportPayload();
+
+  const zipPath = await invoke("export_case_zip", {
+    filePaths,
+    patientName: buildUploadPatientName(context.caseRow, context.patient),
+    summary,
+    manifest,
+  });
+
+  return { zipPath, summary };
+}
+
+async function logSendAction(action, summary) {
+  if (!context?.caseRow) return;
+  await logActivity({
+    category: "send",
+    action,
+    summary,
+    patientId: context.patient?.id,
+    caseId: context.caseRow.id,
+  }).catch(() => {});
+}
+
+async function exportZipLocally() {
+  if (!context || isPlanningReadOnly(context.caseRow)) return;
+
+  if (!(await ensureReadyForSend({ autoMark: true }))) return;
+
+  setSendStatus("CasePackage ZIP oluşturuluyor…");
+
+  try {
+    const result = await exportCasePackageZip();
+    if (!result) return;
+
+    const { zipPath, summary } = result;
+    await writeText(summary);
+    await invoke("reveal_path_in_folder", { path: zipPath });
+    setSendStatus(
+      `CasePackage v${CASE_PACKAGE_VERSION} kaydedildi (İndirilenler/MeshPack). Dropbox / OneDrive / e-posta ile paylaşabilirsiniz.`,
+      "ok"
+    );
+    await logSendAction("zip_save", `${context.caseRow.case_number} ZIP kaydedildi`);
+  } catch (err) {
+    setSendStatus(`❌ ${err}`, "err");
+  }
+}
+
+async function emailSendSummary() {
+  if (!context) return;
+
+  if (!(await ensureReadyForSend({ autoMark: true }))) return;
+
+  setSendStatus("CasePackage ZIP oluşturuluyor…");
+
+  try {
+    const result = await exportCasePackageZip();
+    if (!result) return;
+
+    const { zipPath, summary } = result;
+    await writeText(summary);
+    window.location.href = buildMailtoLink(summary, context.caseRow, { zipPath });
+    await invoke("reveal_path_in_folder", { path: zipPath });
+    setSendStatus(
+      `CasePackage v${CASE_PACKAGE_VERSION} hazır (İndirilenler/MeshPack). Finder'da gösterildi — e-postaya ekleyin.`,
+      "ok"
+    );
+
+    if (
+      context.caseRow.status !== "sent" &&
+      confirm("E-postayı gönderdikten sonra bu vakayı «Gönderildi» olarak işaretlemek ister misiniz?")
+    ) {
+      const updated = await updateCaseStatus(context.caseRow.id, "sent");
+      context.caseRow = updated;
+      renderHeader(updated, context.patient);
+      applyReadOnlyMode(updated);
+      renderScanList(context.scanSession);
+      renderSendSummary();
+      await onDataChange?.();
+      await logSendAction("email", `${context.caseRow.case_number} e-posta ile gönderildi`);
+    }
+  } catch (err) {
+    setSendStatus(`❌ ${err}`, "err");
+  }
+}
+
+async function uploadCaseToCloudFromPlanning() {
+  if (!context || context.caseRow.status === "sent") return;
+
+  if (!(await ensureReadyForSend({ autoMark: true }))) return;
+
+  const cloudBtn = el("btn-planning-cloud");
+  if (cloudBtn) {
+    cloudBtn.disabled = true;
+    cloudBtn.textContent = "⏳ Yükleniyor…";
+  }
+  setSendStatus("MeshPack Lab'a yükleniyor…");
+
+  try {
+    const result = await exportCasePackageZip();
+    if (!result) return;
+
+    const { zipPath, summary } = result;
+    const manifest = getPackageExportPayload().manifest;
+
+    await uploadCaseToCloud({
+      caseRow: context.caseRow,
+      patient: context.patient,
+      manifest,
+      zipPath,
+    });
+
+    const updated = await updateCaseStatus(context.caseRow.id, "sent");
+    context.caseRow = updated;
+    dirty = false;
+    renderHeader(updated, context.patient);
+    applyReadOnlyMode(updated);
+    renderScanList(context.scanSession);
+    renderSendSummary();
+    setSendStatus("✅ MeshPack Lab'a gönderildi. Laboratuvar bildirim alacak.", "ok");
+    await logSendAction("cloud", `${context.caseRow.case_number} MeshPack Lab'a gönderildi`);
+    await openPlanningCaseMessages(context.caseRow);
+    await onDataChange?.();
+  } catch (err) {
+    setSendStatus(`❌ ${err}`, "err");
+    renderSendSummary();
+  }
+}
+
+async function uploadCaseToDrive() {
+  if (!context || context.caseRow.status === "sent") return;
+
+  if (!(await ensureReadyForSend({ autoMark: true }))) return;
+
+  const scans = context.scanSession?.scans || {};
+  const filePaths = ["upper", "lower", "bite"].map((t) => scans[t]?.path).filter(Boolean);
 
   if (!getSettings().drive_connected) {
     alert("Google Drive bağlı değil. Ayarlar → Gönderim sekmesinden bağlanın.");
     return;
   }
-
-  await savePlanning();
 
   const uploadBtn = el("btn-planning-upload");
   if (uploadBtn) {
@@ -295,12 +561,13 @@ async function uploadCaseToDrive() {
   setSendStatus("ZIP oluşturuluyor ve Drive'a yükleniyor…");
 
   try {
-    const summary = buildCaseSummary(getSummaryInput());
+    const { summary, manifest } = getPackageExportPayload();
     const link = await invoke("compress_and_upload", {
       filePaths,
       patientName: buildUploadPatientName(context.caseRow, context.patient),
       notes: summary,
       alignment: null,
+      manifest,
     });
 
     await writeText(link);
@@ -310,6 +577,7 @@ async function uploadCaseToDrive() {
     renderHeader(updated, context.patient);
     renderSendSummary();
     setSendStatus("✅ Drive'a yüklendi. İndirme linki panoya kopyalandı.", "ok");
+    await logSendAction("drive", `${updated.case_number} Drive'a yüklendi`);
     await onDataChange?.();
   } catch (err) {
     setSendStatus(`❌ ${err}`, "err");
@@ -395,6 +663,7 @@ function renderScanList(session) {
 
   const scans = session?.scans || {};
   const types = ["upper", "lower", "bite"];
+  const readOnly = isPlanningReadOnly(context?.caseRow);
 
   listEl.innerHTML = types
     .map((type) => {
@@ -407,6 +676,10 @@ function renderScanList(session) {
           <span class="text-[10px] mp-text-faint">Bağlı değil</span>
         </div>`;
       }
+      const detachBtn = readOnly
+        ? ""
+        : `<button type="button" class="planning-detach-btn mp-btn-ghost text-[10px] px-1.5 py-0.5 rounded shrink-0 text-red-400"
+          data-path="${file.path}" title="Vakadan kaldır">Kaldır</button>`;
       return `
       <div class="planning-scan-row">
         <div class="min-w-0 flex-1">
@@ -414,18 +687,59 @@ function renderScanList(session) {
           <span class="text-[10px] mp-text-muted truncate block" title="${file.filename}">${file.filename}</span>
           <span class="text-[10px] mp-text-faint">${formatFileSize(file.size_bytes)}</span>
         </div>
-        <button type="button" class="planning-detach-btn mp-btn-ghost text-[10px] px-1.5 py-0.5 rounded shrink-0 text-red-400"
-          data-path="${file.path}" title="Vakadan kaldır">Kaldır</button>
+        ${detachBtn}
       </div>`;
     })
     .join("");
 }
 
+function formatSentAt(timestamp) {
+  if (!timestamp) return "";
+  return new Date(timestamp * 1000).toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function setSaveFeedback(message) {
+  const toast = el("planning-save-toast");
+  if (!toast) return;
+  if (!message) {
+    toast.textContent = "";
+    toast.classList.add("hidden");
+    return;
+  }
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  window.clearTimeout(setSaveFeedback._timer);
+  setSaveFeedback._timer = window.setTimeout(() => setSaveFeedback(""), 2500);
+}
+
+function applyReadOnlyMode(caseRow) {
+  const readOnly = isPlanningReadOnly(caseRow);
+  el("planning-view")?.classList.toggle("planning-readonly", readOnly);
+
+  for (const id of ["planning-lab-notes", "planning-tooth-shade-classical", "planning-tooth-shade-3d"]) {
+    const input = el(id);
+    if (input) input.disabled = readOnly;
+  }
+
+  el("planning-lab-templates")?.classList.toggle("hidden", readOnly);
+  el("btn-planning-annotate")?.classList.toggle("hidden", readOnly);
+  el("planning-annotation-compose")?.classList.add("hidden");
+
+  dentalChart?.setReadOnly(readOnly);
+}
+
 function renderHeader(caseRow, patient) {
-  const meta = caseStatusMeta(caseRow.status);
+  const meta = displayCaseStatus(caseRow);
   const caseNum = el("planning-case-number");
   const pill = el("planning-status-pill");
   const subtitle = el("planning-subtitle");
+  const readOnly = isPlanningReadOnly(caseRow);
 
   if (caseNum) caseNum.textContent = caseRow.case_number;
   if (pill) {
@@ -433,15 +747,40 @@ function renderHeader(caseRow, patient) {
     pill.className = `case-status-pill ${meta.cls}`;
   }
   if (subtitle) {
-    subtitle.textContent = `${patientListLabel(patient)} · ${formatSessionDay(caseRow.session_day)}`;
+    const planHint =
+      hasPlanningContent(caseRow) && !readOnly ? " · plan kaydedildi" : "";
+    subtitle.textContent = `${patientListLabel(patient)} · ${formatSessionDay(caseRow.session_day)}${planHint}`;
   }
 
-  const readyBtn = el("btn-planning-ready");
-  if (readyBtn) {
-    readyBtn.disabled = caseRow.status === "sent";
-    readyBtn.textContent =
-      caseRow.status === "ready_to_send" ? "✓ Gönderime hazır" : "Gönderime hazır";
+  const stepsEl = el("planning-status-steps");
+  if (stepsEl) stepsEl.innerHTML = renderCaseStatusSteps(caseRow.status);
+
+  const sentEl = el("planning-sent-info");
+  if (sentEl) {
+    if (caseRow.status === "sent" && caseRow.sent_at) {
+      sentEl.textContent = `Gönderildi: ${formatSentAt(caseRow.sent_at)} — plan salt okunur`;
+      sentEl.classList.remove("hidden");
+    } else {
+      sentEl.textContent = "";
+      sentEl.classList.add("hidden");
+    }
   }
+
+  el("planning-readonly-banner")?.classList.toggle("hidden", !readOnly);
+
+  const saveBtn = el("btn-planning-save");
+  const readyBtn = el("btn-planning-ready");
+  if (saveBtn) saveBtn.classList.toggle("hidden", readOnly);
+  if (readyBtn) {
+    readyBtn.classList.toggle("hidden", readOnly);
+    readyBtn.disabled = readOnly;
+    if (!readOnly) {
+      readyBtn.textContent =
+        caseRow.status === "ready_to_send" ? "✓ Gönderime hazır" : "Gönderime hazır";
+    }
+  }
+
+  document.querySelector(".planning-send-section")?.classList.toggle("planning-section-readonly", readOnly);
 }
 
 function initDentalChart() {
@@ -467,6 +806,30 @@ function loadDentalPlan(raw) {
   dentalChart?.setPlan(parseDentalPlan(raw));
 }
 
+function initLabNoteTemplates() {
+  const container = el("planning-lab-templates");
+  if (!container || container.dataset.ready) return;
+  container.dataset.ready = "1";
+
+  container.innerHTML = LAB_NOTE_TEMPLATES.map(
+    (item, index) =>
+      `<button type="button" data-lab-template-idx="${index}" class="template-btn px-2 py-1 rounded text-[10px] font-medium">${item.label}</button>`
+  ).join("");
+
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-lab-template-idx]");
+    if (!btn) return;
+    const item = LAB_NOTE_TEMPLATES[Number(btn.dataset.labTemplateIdx)];
+    if (!item) return;
+    const notes = el("planning-lab-notes");
+    if (!notes) return;
+    notes.value = appendLabNoteTemplate(notes.value, item.text);
+    dirty = true;
+    renderSendSummary();
+    notes.focus();
+  });
+}
+
 export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChangeHandler }) {
   onClose = closeHandler;
   onDataChange = dataChangeHandler;
@@ -474,6 +837,8 @@ export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChan
   initDentalChart();
 
   initShadeSelectors();
+  initLabNoteTemplates();
+  bindPlanningCaseMessages();
 
   el("btn-planning-back")?.addEventListener("click", () => closePlanning());
   el("btn-planning-save")?.addEventListener("click", () => savePlanning());
@@ -500,6 +865,8 @@ export function initPlanningPage({ onClose: closeHandler, onDataChange: dataChan
   );
 
   el("btn-planning-copy-summary")?.addEventListener("click", () => copySendSummary());
+  el("btn-planning-export-zip")?.addEventListener("click", () => exportZipLocally());
+  el("btn-planning-cloud")?.addEventListener("click", () => uploadCaseToCloudFromPlanning());
   el("btn-planning-email")?.addEventListener("click", () => emailSendSummary());
   el("btn-planning-upload")?.addEventListener("click", () => uploadCaseToDrive());
 
@@ -532,7 +899,12 @@ export async function openPlanning(patient, scanSession) {
     return;
   }
 
-  const caseRow = await getCase(scanSession.caseId);
+  let caseRow = await getCase(scanSession.caseId);
+  if (caseRow.status === "linked") {
+    caseRow = await beginCasePlanning(caseRow.id);
+    await onDataChange?.();
+  }
+
   context = { patient, scanSession, caseRow };
   dirty = false;
 
@@ -544,10 +916,13 @@ export async function openPlanning(patient, scanSession) {
   loadDentalPlan(caseRow.dental_plan || "{}");
 
   renderHeader(caseRow, patient);
+  applyReadOnlyMode(caseRow);
   renderScanList(scanSession);
   await loadPlanningScans(scanSession);
   loadAnnotations(caseRow.annotations || "{}");
+  await refreshMeshPackLabSendState();
   renderSendSummary();
+  await openPlanningCaseMessages(caseRow);
 
   el("new-scan-banner")?.classList.add("hidden");
   el("main-layout")?.classList.add("hidden");
@@ -562,9 +937,11 @@ export function closePlanning() {
   el("planning-view")?.classList.add("hidden");
   el("main-layout")?.classList.remove("hidden");
   clearPlanningViewer();
+  closePlanningCaseMessages();
   context = null;
   dirty = false;
   setSendStatus("");
+  setSaveFeedback("");
   onClose?.();
 }
 
@@ -598,6 +975,8 @@ async function detachFromCase(filePath) {
 
 async function savePlanning() {
   if (!context) return null;
+  if (isPlanningReadOnly(context.caseRow)) return context.caseRow;
+
   const notes = el("planning-lab-notes")?.value?.trim() ?? "";
   const toothShade = getToothShade();
   const dentalPlan = serializeDentalPlan(dentalChart?.getPlan() || emptyPlan());
@@ -615,6 +994,8 @@ async function savePlanning() {
     dirty = false;
     renderHeader(updated, context.patient);
     renderSendSummary();
+    setSaveFeedback("✓ Plan kaydedildi");
+    await onDataChange?.();
     return updated;
   } catch (err) {
     alert(`Kaydedilemedi: ${err}`);
@@ -625,13 +1006,16 @@ async function savePlanning() {
 async function markReadyToSend() {
   if (!context) return;
   if (context.caseRow.status === "sent") return;
+  if (context.caseRow.status === "ready_to_send") return;
 
-  await savePlanning();
+  if (!(await ensureReadyForSend({ autoMark: false }))) return;
 
   try {
     const updated = await updateCaseStatus(context.caseRow.id, "ready_to_send");
     context.caseRow = updated;
     renderHeader(updated, context.patient);
+    renderReadinessChecklist();
+    await onDataChange?.();
   } catch (err) {
     alert(`Durum güncellenemedi: ${err}`);
   }

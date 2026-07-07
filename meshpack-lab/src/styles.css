@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lab-bg: 13 17 23;
+  --lab-surface: 22 27 34;
+  --lab-elevated: 33 38 45;
+  --lab-border: 48 54 61;
+  --lab-text: 230 237 243;
+  --lab-muted: 139 148 158;
+  --lab-accent: 88 166 255;
+  --lab-green: 63 185 80;
+  --lab-orange: 210 153 34;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: rgb(var(--lab-bg));
+  color: rgb(var(--lab-text));
+  -webkit-font-smoothing: antialiased;
+}
+
+.field-label {
+  @apply block text-[10px] uppercase tracking-wide text-lab-muted mb-1;
+}
+
+.field-input {
+  @apply w-full px-3 py-2 rounded-lg border border-lab-border bg-lab-elevated text-sm text-lab-text outline-none focus:border-lab-accent/60;
+}
+
+.btn-primary {
+  @apply px-3 py-2 rounded-lg bg-lab-accent text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40;
+}
+
+.btn-ghost {
+  @apply px-2 py-1 rounded text-lab-muted hover:text-lab-text hover:bg-lab-elevated transition-colors;
+}
+
+.auth-tab {
+  @apply text-lab-muted transition-colors;
+}
+.auth-tab.is-active {
+  @apply bg-lab-surface text-lab-text shadow-sm;
+}
+
+.section-title {
+  @apply text-[10px] uppercase tracking-wide text-lab-muted mb-1.5;
+}
+
+.status-badge {
+  @apply inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium;
+}
+.badge-sent { @apply bg-lab-accent/15 text-lab-accent border border-lab-accent/30; }
+.badge-received { @apply bg-lab-green/15 text-lab-green border border-lab-green/30; }
+.badge-production { @apply bg-purple-500/15 text-purple-300 border border-purple-500/30; }
+.badge-qc { @apply bg-yellow-500/15 text-yellow-300 border border-yellow-500/30; }
+.badge-shipped { @apply bg-orange-500/15 text-orange-300 border border-orange-500/30; }
+.badge-completed { @apply bg-lab-green/20 text-lab-green border border-lab-green/40; }
+.badge-cancelled { @apply bg-red-500/15 text-red-300 border border-red-500/30; }
+
+.queue-item {
+  @apply w-full text-left p-3 rounded-lg border border-transparent hover:bg-lab-elevated/60 transition-colors cursor-pointer;
+}
+.queue-item.is-selected {
+  @apply bg-lab-elevated border-lab-accent/40;
+}
+
+.queue-item.has-unread {
+  @apply border-lab-orange/45 bg-lab-orange/5;
+}
+
+.queue-item .queue-unread-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: rgb(var(--lab-orange));
+  box-shadow: 0 0 0 2px rgb(var(--lab-orange) / 0.2);
+}
+
+.message-bubble {
+  @apply text-xs p-2 rounded-lg max-w-full break-words;
+}
+.message-bubble.mine {
+  @apply bg-lab-accent/20 text-lab-text ml-4;
+}
+.message-bubble.theirs {
+  @apply bg-lab-elevated text-lab-text mr-4;
+}
+
+.timeline-row {
+  @apply text-xs rounded-lg border border-lab-border bg-lab-elevated/40 px-2.5 py-2;
+}
+
+.timeline-row .k {
+  @apply text-[10px] text-lab-muted;
+}
+
+.timeline-row .v {
+  @apply text-lab-text mt-0.5;
+}
+
+.annotation-row {
+  @apply rounded-lg border border-lab-border bg-lab-elevated/40 px-2.5 py-2;
+}
+
+.annotation-row .t {
+  @apply text-[10px] text-lab-muted;
+}
+
+.annotation-row .b {
+  @apply text-xs text-lab-text mt-0.5 whitespace-pre-wrap;
+}
+
+.annotation-row-btn {
+  @apply cursor-pointer transition-colors hover:border-lab-accent/40 hover:bg-lab-elevated/70;
+}
+
+.annotation-row-btn.is-active {
+  @apply border-lab-accent/50 bg-lab-accent/10;
+}
+
+.preview-toggle-btn {
+  @apply px-2 py-0.5 rounded text-[10px] font-medium border border-lab-border text-lab-muted transition-colors;
+}
+
+.preview-toggle-btn.is-on {
+  @apply border-lab-accent/45 bg-lab-accent/15 text-lab-accent;
+}
+
+.preview-toggle-btn.is-off {
+  @apply opacity-45;
+}
+
+.preview-toggle-btn:disabled {
+  @apply opacity-30 cursor-not-allowed;
+}
+
+#queue-list::-webkit-scrollbar,
+#messages-list::-webkit-scrollbar,
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+#queue-list::-webkit-scrollbar-thumb,
+#messages-list::-webkit-scrollbar-thumb,
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgb(var(--lab-border));
+  border-radius: 9999px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.auth-error-error {
+  color: rgb(var(--lab-orange));
+  background: rgb(var(--lab-orange) / 0.1);
+  border-color: rgb(var(--lab-orange) / 0.35);
+}
+
+.auth-error-info {
+  color: rgb(var(--lab-green));
+  background: rgb(var(--lab-green) / 0.1);
+  border-color: rgb(var(--lab-green) / 0.35);
+}
+
+.main-tab {
+  @apply text-lab-muted transition-colors;
+}
+.main-tab.is-active {
+  @apply bg-lab-surface text-lab-text shadow-sm;
+}
+
+.hub-badge {
+  @apply inline-flex items-center justify-center min-w-[1.125rem] h-[1.125rem] px-1 rounded-full text-[9px] font-semibold bg-lab-orange text-white;
+}
+
+.hub-empty {
+  @apply text-xs text-lab-muted p-4 text-center;
+}
+
+.hub-thread {
+  @apply block w-full text-left px-4 py-3 border-b border-lab-border/60 bg-transparent transition-colors cursor-pointer;
+}
+.hub-thread:hover {
+  @apply bg-lab-elevated/55;
+}
+.hub-thread.is-active {
+  @apply bg-lab-accent/10 border-l-2 border-l-lab-accent;
+}
+
+.hub-thread-top {
+  @apply flex items-center justify-between gap-2;
+}
+.hub-thread-title {
+  @apply text-xs font-semibold text-lab-text;
+}
+.hub-thread-time {
+  @apply text-[9px] text-lab-muted shrink-0;
+}
+.hub-thread-patient {
+  @apply text-[11px] text-lab-text/80 mt-0.5;
+}
+.hub-thread-preview {
+  @apply text-[10px] text-lab-muted mt-1 truncate;
+}
+.hub-thread-meta {
+  @apply flex items-center justify-between mt-1.5;
+}
+.hub-thread-status {
+  @apply text-[9px] text-lab-muted;
+}
+.hub-thread-unread {
+  @apply min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[9px] font-semibold inline-flex items-center justify-center bg-lab-orange/20 text-lab-orange;
+}
+
+.hub-notification {
+  @apply block w-full text-left p-2.5 rounded-lg border border-transparent mb-1 cursor-pointer transition-colors;
+}
+.hub-notification:hover {
+  @apply bg-lab-elevated/55;
+}
+.hub-notification.is-unread {
+  @apply bg-lab-accent/10 border-lab-accent/25;
+}
+.hub-notification-title {
+  @apply text-[11px] font-semibold text-lab-text;
+}
+.hub-notification-body {
+  @apply text-[10px] text-lab-muted mt-0.5 leading-snug;
+}
+.hub-notification-time {
+  @apply text-[9px] text-lab-muted/70 mt-1;
+}
+
+.btn-secondary {
+  @apply px-2 py-1 rounded-lg border border-lab-border bg-lab-elevated text-lab-text text-xs hover:bg-lab-elevated/80 transition-colors;
+}

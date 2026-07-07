@@ -105,11 +105,15 @@ export function buildCaseSummary({
   return lines.join("\n");
 }
 
-export function buildMailtoLink(summary, caseRow) {
+export function buildMailtoLink(summary, caseRow, { zipPath = "" } = {}) {
   const subject = encodeURIComponent(
     `MeshPack iş emri — ${caseRow?.case_number || "vaka"}`
   );
-  const body = encodeURIComponent(summary);
+  let bodyText = summary;
+  if (zipPath) {
+    bodyText += `\n\n---\nEk: ZIP dosyasını e-postaya ekleyin:\n${zipPath}`;
+  }
+  const body = encodeURIComponent(bodyText);
   return `mailto:?subject=${subject}&body=${body}`;
 }
 

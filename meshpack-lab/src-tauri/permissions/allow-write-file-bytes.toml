@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-write-file-bytes"
+description = "ZIP dosyalarını diske kaydetmek için"
+commands.allow = ["write_file_bytes"]
