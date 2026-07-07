@@ -1,6 +1,6 @@
 # MeshPack — Ürün yol haritası
 
-> Klinik ↔ laboratuvar dijital iş akışı. Son güncelleme: 2026-07-05 (kod tabanı denetimi).
+> Klinik ↔ laboratuvar dijital iş akışı. Son güncelleme: 2026-07-07.
 
 ---
 
@@ -99,9 +99,9 @@ Giriş yolları:
 | 4.2 | Uçtan uca şifreleme / KVKK uyumu | 🔲 Kısmen | Bulut token şifreli kasa ✅; vaka E2E sıradaki |
 | 4.3 | Lab tarafında vaka kuyruğu | ✅ MVP | `meshpack-lab/` — kuyruk, ZIP, mesaj, durum |
 | 4.4 | Durum senkronu (alındı, üretimde, kargoda, tamam) | 🔲 Kısmen | `cloud_case_status` enum hazır |
-| 4.5 | **Anlık mesajlaşma** (vaka bazlı chat) | ✅ Kısmen | `case_messages` + Realtime |
+| 4.5 | **Anlık mesajlaşma** (vaka bazlı chat) | ✅ Kısmen | Mesajlar merkezi + planlama paneli + lab sekmesi |
 | 4.6 | Dosya + mesaj + plan tek vakada | ✅ Kısmen | Cloud upload + manifest |
-| 4.7 | Bildirimler (yeni mesaj, yeni vaka) | ✅ Kısmen | `notifications` + Realtime |
+| 4.7 | Bildirimler (yeni mesaj, yeni vaka) | ✅ Kısmen | Bildirim paneli + header rozeti + Realtime |
 
 ---
 
@@ -167,7 +167,8 @@ Giriş yolları:
 ─── sıradaki ───
 13. MeshPack Cloud (Supabase) iskelet ✅
 14. meshpack-lab uygulaması (cloud kuyruğu + mesaj) ✅ MVP
-15. Uçtan uca cloud test + klinik mesaj UI
+15. Uçtan uca cloud test + klinik mesaj UI ✅ kısmen
+16. alignment.json export + lab önizleme hizası ✅ kısmen
 ```
 
 ---

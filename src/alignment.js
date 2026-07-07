@@ -212,3 +212,23 @@ export function identityTransformSet() {
   const id = matrixToArray(new THREE.Matrix4().identity());
   return { upper: id, bite: id, lower: id };
 }
+
+/** CasePackage alignment.json — lab önizlemesi ile aynı format */
+export function buildAlignmentPackage(transforms, mode = "scanner") {
+  const base = transforms || identityTransformSet();
+  return {
+    version: 1,
+    mode,
+    upper: base.upper,
+    lower: base.lower,
+    bite: base.bite,
+  };
+}
+
+export function resolveAlignmentFromSession(scanSession) {
+  if (scanSession?.alignment) return scanSession.alignment;
+  if (scanSession?.transforms) {
+    return buildAlignmentPackage(scanSession.transforms, scanSession.alignmentMode || "icp");
+  }
+  return buildAlignmentPackage(null, "scanner");
+}

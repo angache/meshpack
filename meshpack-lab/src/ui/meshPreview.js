@@ -243,7 +243,7 @@ export class MeshPreview {
     }
 
     this.aligned = applied;
-    this.alignmentMode = applied ? "package" : null;
+    this.alignmentMode = applied ? transforms.mode || "package" : null;
     return applied;
   }
 

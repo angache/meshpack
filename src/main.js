@@ -11,7 +11,7 @@ import {
   SCAN_LABELS,
 } from "./utils.js";
 import { patientDisplayName, patientListLabel } from "./patients.js";
-import { identityTransformSet, matrixToArray } from "./alignment.js";
+import { identityTransformSet, matrixToArray, buildAlignmentPackage } from "./alignment.js";
 import {
   applySettings,
   getDefaultVisibility,
@@ -88,6 +88,24 @@ function initViewer() {
   viewer = new MeshViewer(document.getElementById("mesh-canvas"));
 }
 
+function buildScanSessionAlignment(scanSession) {
+  const paths = ["upper", "lower", "bite"].map((t) => scanSession?.scans?.[t]?.path).filter(Boolean);
+  const sessionPaths = session.getAllScans().map((s) => s.path);
+  const sameScans = paths.length === 3 && paths.every((p) => sessionPaths.includes(p));
+
+  if (!sameScans || !session.aligned) return null;
+  if (session.transforms) {
+    return buildAlignmentPackage(session.transforms, "icp");
+  }
+  return buildAlignmentPackage(identityTransformSet(), "scanner");
+}
+
+function openPlanningWithAlignment(patient, scanSession) {
+  const alignment = buildScanSessionAlignment(scanSession);
+  hidePlanningPrompt();
+  openPlanning(patient, alignment ? { ...scanSession, alignment } : scanSession);
+}
+
 function initFileBrowser() {
   fileBrowser = new FileBrowser({
     listContainer: document.getElementById("file-browser-root"),
@@ -95,10 +113,7 @@ function initFileBrowser() {
     onPatientSelect: (patient, scanSession) => selectPatient(patient, scanSession),
     onSessionSelect: (patient, scanSession) => selectPatient(patient, scanSession),
     onPatientUpdated: (patient) => syncPatientToForm(patient),
-    onOpenPlanning: (patient, scanSession) => {
-      hidePlanningPrompt();
-      openPlanning(patient, scanSession);
-    },
+    onOpenPlanning: (patient, scanSession) => openPlanningWithAlignment(patient, scanSession),
     onCaseLinked: (patient, scanSession) => showPlanningPrompt(patient, scanSession),
     onToggleScan: (type) => toggleScanVisibility(type),
     getSessionPaths: () => session.getAllScans().map((s) => s.path),
@@ -167,7 +182,7 @@ function hidePlanningPrompt() {
 
 function gotoPlanningPrompt() {
   if (!planningPrompt) return;
-  openPlanning(planningPrompt.patient, planningPrompt.scanSession);
+  openPlanningWithAlignment(planningPrompt.patient, planningPrompt.scanSession);
   hidePlanningPrompt();
 }
 
@@ -624,7 +639,7 @@ async function init() {
       if (!patient) return;
       fileBrowser.openPatient(patient, entry.id);
       const session = fileBrowser.getActiveScanSession();
-      if (session?.caseId) openPlanning(patient, session);
+      if (session?.caseId) openPlanningWithAlignment(patient, session);
     },
   });
   applyViewerSettings();

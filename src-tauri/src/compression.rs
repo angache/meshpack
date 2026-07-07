@@ -119,6 +119,7 @@ pub fn export_scans_zip(
     file_paths: &[String],
     patient_name: &str,
     zip_name_template: &str,
+    alignment: Option<&Value>,
     summary_notes: Option<&str>,
     manifest_json: Option<&str>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -126,7 +127,7 @@ pub fn export_scans_zip(
         file_paths,
         patient_name,
         zip_name_template,
-        None,
+        alignment,
         summary_notes,
         manifest_json,
     )?;

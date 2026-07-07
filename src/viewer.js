@@ -3,7 +3,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { alignBiteRegistration } from "./alignment.js";
+import { alignBiteRegistration, identityTransformSet, matrixToArray, buildAlignmentPackage } from "./alignment.js";
 
 /** Kirli sarı (üst/alt çene) ve kırmızı (kapanış) */
 const SCAN_COLORS = {
@@ -36,6 +36,8 @@ export class MeshViewer {
     this.meshGroup = null;
     this.animationId = null;
     this.aligned = false;
+    this.transforms = null;
+    this.alignmentMode = null;
     this.visibility = { upper: true, lower: true, bite: false };
     this.cameraPreset = "default";
     this.scanColors = { ...SCAN_COLORS };
@@ -135,6 +137,8 @@ export class MeshViewer {
     this.meshes = {};
     this.scanPaths = {};
     this.aligned = false;
+    this.transforms = null;
+    this.alignmentMode = null;
   }
 
   _resetMeshTransform(mesh) {
@@ -268,6 +272,49 @@ export class MeshViewer {
     this.meshes[type] = mesh;
     this.meshGroup.add(mesh);
     this.aligned = false;
+    this.transforms = null;
+    this.alignmentMode = null;
+  }
+
+  applyAlignmentPackage(transforms) {
+    if (!transforms || typeof transforms !== "object") return false;
+
+    let applied = false;
+    for (const type of ["upper", "bite", "lower"]) {
+      const mesh = this.meshes[type];
+      const raw = transforms[type];
+      if (!mesh || !Array.isArray(raw) || raw.length !== 16) continue;
+      const matrix = new THREE.Matrix4().fromArray(raw.map(Number));
+      mesh.applyMatrix4(matrix);
+      mesh.geometry.applyMatrix4(matrix);
+      mesh.geometry.computeVertexNormals();
+      mesh.geometry.computeBoundingSphere();
+      applied = true;
+    }
+
+    if (applied) {
+      this.aligned = true;
+      this.alignmentMode = transforms.mode || "package";
+      this.transforms = {
+        upper: transforms.upper,
+        lower: transforms.lower,
+        bite: transforms.bite,
+      };
+    }
+    return applied;
+  }
+
+  acceptScannerAlignment() {
+    this.transforms = identityTransformSet();
+    this.alignmentMode = "scanner";
+    this.aligned = Object.keys(this.meshes).length > 0;
+  }
+
+  getAlignmentExport() {
+    if (!this.aligned || !this.transforms) {
+      return buildAlignmentPackage(null, "scanner");
+    }
+    return buildAlignmentPackage(this.transforms, this.alignmentMode || "scanner");
   }
 
   async alignBite() {
@@ -283,6 +330,12 @@ export class MeshViewer {
       bite: { mesh: this.meshes.bite, geometry: this.meshes.bite.geometry },
     });
 
+    this.transforms = {
+      upper: matrixToArray(transforms.upper),
+      bite: matrixToArray(transforms.bite),
+      lower: matrixToArray(transforms.lower),
+    };
+    this.alignmentMode = "icp";
     this.aligned = true;
     this._fitCamera();
     return transforms;

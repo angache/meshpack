@@ -197,6 +197,7 @@ fn export_case_zip(
     patient_name: String,
     summary: String,
     manifest: Option<String>,
+    alignment: Option<serde_json::Value>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     if file_paths.is_empty() {
@@ -214,6 +215,7 @@ fn export_case_zip(
         &file_paths,
         &patient_name,
         &zip_template,
+        alignment.as_ref(),
         Some(summary.as_str()),
         manifest.as_deref(),
     )

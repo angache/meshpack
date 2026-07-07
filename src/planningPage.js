@@ -45,6 +45,7 @@ import {
 } from "./config/vitaShades.js";
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { buildAlignmentPackage, resolveAlignmentFromSession } from "./alignment.js";
 
 let context = null;
 let onClose = null;
@@ -401,6 +402,11 @@ function getPackageExportPayload() {
   return { summary, manifest };
 }
 
+function getAlignmentForExport() {
+  initPlanningViewer();
+  return planningViewer?.getAlignmentExport() || buildAlignmentPackage(null, "scanner");
+}
+
 async function exportCasePackageZip() {
   if (!context) return null;
 
@@ -419,6 +425,7 @@ async function exportCasePackageZip() {
     patientName: buildUploadPatientName(context.caseRow, context.patient),
     summary,
     manifest,
+    alignment: getAlignmentForExport(),
   });
 
   return { zipPath, summary };
@@ -566,7 +573,7 @@ async function uploadCaseToDrive() {
       filePaths,
       patientName: buildUploadPatientName(context.caseRow, context.patient),
       notes: summary,
-      alignment: null,
+      alignment: getAlignmentForExport(),
       manifest,
     });
 
@@ -625,6 +632,13 @@ async function loadPlanningScans(scanSession) {
   const placeholder = el("planning-viewer-placeholder");
   if (loaded > 0) {
     placeholder?.classList.add("hidden");
+    const alignment = resolveAlignmentFromSession(scanSession);
+    const hasAll = ["upper", "lower", "bite"].every((t) => planningViewer?.hasMesh(t));
+    if (hasAll && alignment.mode !== "scanner") {
+      planningViewer.applyAlignmentPackage(alignment);
+    } else {
+      planningViewer.acceptScannerAlignment();
+    }
     requestAnimationFrame(() => {
       planningViewer?._resize();
       planningViewer?._fitCamera();

@@ -579,7 +579,7 @@ async function renderPackagePreview(row) {
     blob = await downloadCasePackage(candidates[0], candidates.slice(1));
   } catch (err) {
     state.previewLoadingKey = null;
-    if (debugEl) {
+    if (debugEl && import.meta.env.DEV) {
       debugEl.textContent = `storage_path: ${row.package_storage_path || "—"}\ncandidates:\n- ${candidates.join("\n- ")}\n\n${err.message || err}`;
       debugEl.classList.remove("hidden");
     }
@@ -610,10 +610,9 @@ async function renderPackagePreview(row) {
   }
 
   const alignment = await parseAlignmentFromZip(zip);
-  if (alignment) {
+  if (alignment && alignment.mode !== "scanner") {
     viewer.applyAlignmentFromPackage(alignment);
   } else {
-    // Klinik ana ekran gibi: tarayıcı hizası (otomatik ICP yok — ICP kayık modelleri bozar)
     viewer.acceptScannerAlignment();
   }
 
