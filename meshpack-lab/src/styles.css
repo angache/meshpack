@@ -214,6 +214,19 @@ body {
   @apply min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[9px] font-semibold inline-flex items-center justify-center bg-lab-orange/20 text-lab-orange;
 }
 
+.hub-load-more,
+.hub-load-older {
+  @apply block w-full my-1 p-2 text-[11px] text-lab-muted bg-transparent border border-dashed border-lab-border rounded-lg cursor-pointer transition-colors;
+}
+.hub-load-more:hover:not(:disabled),
+.hub-load-older:hover:not(:disabled) {
+  @apply bg-lab-elevated/55 text-lab-text;
+}
+.hub-load-more:disabled,
+.hub-load-older:disabled {
+  @apply opacity-60 cursor-default;
+}
+
 .hub-notification {
   @apply block w-full text-left p-2.5 rounded-lg border border-transparent mb-1 cursor-pointer transition-colors;
 }

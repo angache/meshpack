@@ -69,17 +69,19 @@ export async function markAllNotificationsRead() {
 }
 export async function markNotificationRead(id) {
   const supabase = getSupabase();
-  if (!supabase) return;
+  const session = await getSession();
+  if (!supabase || !session || !id) return;
 
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", session.user.id);
 
   if (error) throw error;
 }
 
-export function subscribeNotifications(onNotification) {
+export function subscribeNotifications(onChange) {
   const supabase = getSupabase();
   if (!supabase) return () => {};
 
@@ -95,7 +97,16 @@ export function subscribeNotifications(onNotification) {
       { event: "INSERT", schema: "public", table: "notifications" },
       (payload) => {
         if (!userId || payload.new?.user_id === userId) {
-          onNotification?.(payload.new);
+          onChange?.(payload.new, "insert");
+        }
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "notifications" },
+      (payload) => {
+        if (!userId || payload.new?.user_id === userId) {
+          onChange?.(payload.new, "update");
         }
       }
     )

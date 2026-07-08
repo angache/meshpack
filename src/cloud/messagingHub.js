@@ -1,6 +1,5 @@
 import { getSupabase } from "./supabaseClient.js";
 import { getActiveOrganization } from "./auth.js";
-import { listNotifications } from "./notifications.js";
 
 export const CLOUD_CASE_STATUS_LABELS = {
   sent: "Gönderildi",
@@ -12,72 +11,48 @@ export const CLOUD_CASE_STATUS_LABELS = {
   cancelled: "İptal",
 };
 
-export async function getUnreadCountsByCase() {
-  const notifications = await listNotifications({ unreadOnly: true, limit: 200 });
-  const counts = new Map();
-  for (const n of notifications) {
-    if (!n.case_id) continue;
-    counts.set(n.case_id, (counts.get(n.case_id) || 0) + 1);
-  }
-  return counts;
+export const THREAD_PAGE_SIZE = 30;
+
+function mapThreadRow(r) {
+  return {
+    caseId: r.case_id,
+    caseNumber: r.case_number,
+    patientName: r.patient_display_name,
+    status: r.status,
+    lastMessage: r.last_message_at
+      ? {
+          body: r.last_message_body,
+          created_at: r.last_message_at,
+          author_org_id: r.last_message_author_org_id,
+        }
+      : null,
+    updatedAt: r.sort_at,
+    unreadCount: Number(r.unread_count) || 0,
+  };
 }
 
-export async function listMessageThreads() {
+/**
+ * Konuşma listesini server-side (RPC) üretir. Sayfalama destekler.
+ * Her vakanın son mesajı + kullanıcının okunmamış sayısı tek sorguda gelir.
+ */
+export async function listMessageThreads({ limit = THREAD_PAGE_SIZE, offset = 0 } = {}) {
   const supabase = getSupabase();
   const org = await getActiveOrganization();
-  if (!supabase || !org) return { threads: [], orgId: null, orgType: null };
-
-  let caseQuery = supabase
-    .from("cloud_cases")
-    .select("id, case_number, patient_display_name, status, sent_at, updated_at, clinic_org_id, lab_org_id")
-    .order("updated_at", { ascending: false })
-    .limit(200);
-
-  if (org.org_type === "clinic") {
-    caseQuery = caseQuery.eq("clinic_org_id", org.id);
-  } else {
-    caseQuery = caseQuery.eq("lab_org_id", org.id);
+  if (!supabase || !org) {
+    return { threads: [], orgId: null, orgType: null, hasMore: false };
   }
 
-  const { data: cases, error: caseErr } = await caseQuery;
-  if (caseErr) throw caseErr;
-
-  const { data: messages, error: msgErr } = await supabase
-    .from("case_messages")
-    .select("id, case_id, body, created_at, author_org_id")
-    .order("created_at", { ascending: false })
-    .limit(1000);
-
-  if (msgErr) throw msgErr;
-
-  const lastByCase = new Map();
-  for (const m of messages || []) {
-    if (!lastByCase.has(m.case_id)) lastByCase.set(m.case_id, m);
-  }
-
-  const caseIdsWithMessages = new Set([...lastByCase.keys()]);
-  const unreadMap = await getUnreadCountsByCase();
-
-  const filteredCases = (cases || []).filter((c) => {
-    if (caseIdsWithMessages.has(c.id)) return true;
-    if (org.org_type === "lab") return true;
-    return (
-      c.lab_org_id &&
-      ["sent", "received", "in_production", "quality_check", "shipped", "completed"].includes(c.status)
-    );
+  const { data, error } = await supabase.rpc("list_message_threads", {
+    p_limit: limit,
+    p_offset: offset,
   });
+  if (error) throw error;
 
-  const threads = filteredCases
-    .map((c) => ({
-      caseId: c.id,
-      caseNumber: c.case_number,
-      patientName: c.patient_display_name,
-      status: c.status,
-      lastMessage: lastByCase.get(c.id) || null,
-      updatedAt: lastByCase.get(c.id)?.created_at || c.updated_at || c.sent_at,
-      unreadCount: unreadMap.get(c.id) || 0,
-    }))
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-
-  return { threads, orgId: org.id, orgType: org.org_type };
+  const threads = (data || []).map(mapThreadRow);
+  return {
+    threads,
+    orgId: org.id,
+    orgType: org.org_type,
+    hasMore: threads.length >= limit,
+  };
 }

@@ -105,6 +105,31 @@ Giriş yolları:
 
 ---
 
+## Faz 6 — MeshPack Lab Mobile (kısıtlı companion) `PLANLANDI`
+
+**Hedef:** Lab personeli yolda/telefondan mesajlara cevap verir; dosya ve 3D işleri desktop’ta kalır.
+
+> Detaylı mimari: [`docs/LAB_MOBILE.md`](docs/LAB_MOBILE.md)
+
+| # | Özellik | Durum | Not |
+|---|---------|-------|-----|
+| 6.0 | Mimari + karar dokümanı | ✅ | `docs/LAB_MOBILE.md` |
+| 6.1 | Expo projesi (`meshpack-lab-mobile/`) | 🔲 | RN + Expo Router |
+| 6.2 | Cloud modül taşıma | 🔲 | `auth`, `messages`, `notifications`, `messagingHub` |
+| 6.3 | Giriş + lab org kontrolü | 🔲 | `org_type === 'lab'` |
+| 6.4 | Konuşma listesi + sohbet | 🔲 | RPC + sayfalama + realtime |
+| 6.5 | Local-first unread (hub pattern) | 🔲 | `messagesHubUI.js` mantığı |
+| 6.6 | `device_tokens` + push migration | 🔲 | FCM/APNs |
+| 6.7 | Edge Function push delivery | 🔲 | `notifications` INSERT webhook |
+| 6.8 | Deep link (bildirim → sohbet) | 🔲 | Expo Notifications |
+| 6.9 | Vaka özeti kartı (metadata) | 🔲 | manifest + dental_plan özet |
+| 6.10 | Thumbnail önizleme | 🔲 v2 | Sunucu PNG; tam 3D yok |
+| 6.11 | Storage erişimi mobilde kapalı | 🔲 | RLS / policy bilinçli red |
+
+**Bilinçli kapsam dışı:** ZIP indirme, 3D viewer, durum güncelleme (v1), klinik bağlantı yönetimi.
+
+---
+
 ## Faz 5 — İyileştirmeler ve polish `SONRA`
 
 | # | Özellik | Durum | Not |

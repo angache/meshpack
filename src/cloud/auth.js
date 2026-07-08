@@ -2,6 +2,16 @@ import { clearSecureCloudSessions } from "./secureStorage.js";
 import { getSupabase, getSupabaseAsync, resetSupabaseClient } from "./supabaseClient.js";
 import { fromSupabaseAuthError, fromSupabaseRpcError } from "./authErrors.js";
 
+const AUTH_CACHE_TTL = 30000;
+let _profileCache = null;
+let _orgCache = null;
+
+/** Profil/organizasyon belleğini temizler (giriş/çıkış/org değişimi sonrası). */
+export function clearAuthCache() {
+  _profileCache = null;
+  _orgCache = null;
+}
+
 export async function getSession() {
   const supabase = await getSupabaseAsync();
   if (!supabase) return null;
@@ -15,6 +25,8 @@ export async function signIn(email, password) {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw fromSupabaseAuthError(error, "auth_signin", "Giriş başarısız");
+
+  clearAuthCache();
 
   if (data.session) {
     await supabase.auth.setSession({
@@ -54,6 +66,7 @@ export async function registerOrganization(orgName, orgType) {
     console.error("[registerOrganization]", error);
     throw fromSupabaseRpcError(error, "register_org", "Organizasyon oluşturulamadı");
   }
+  clearAuthCache();
   return data;
 }
 
@@ -111,36 +124,73 @@ export async function signOut() {
   }
   await clearSecureCloudSessions();
   resetSupabaseClient();
+  clearAuthCache();
 }
 
-export async function getProfile() {
-  const supabase = getSupabase();
-  const session = await getSession();
-  if (!supabase || !session) return null;
+export async function getProfile({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && _profileCache) {
+    if (_profileCache.promise) return _profileCache.promise;
+    if (now - _profileCache.at < AUTH_CACHE_TTL) return _profileCache.value;
+  }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, active_organization_id")
-    .eq("id", session.user.id)
-    .maybeSingle();
+  const promise = (async () => {
+    const supabase = getSupabase();
+    const session = await getSession();
+    if (!supabase || !session) return null;
 
-  if (error) throw error;
-  return data;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, display_name, active_organization_id")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  })();
+
+  _profileCache = { at: now, value: null, promise };
+  try {
+    const value = await promise;
+    _profileCache = { at: Date.now(), value, promise: null };
+    return value;
+  } catch (err) {
+    _profileCache = null;
+    throw err;
+  }
 }
 
-export async function getActiveOrganization() {
-  const profile = await getProfile();
-  if (!profile?.active_organization_id) return null;
+export async function getActiveOrganization({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && _orgCache) {
+    if (_orgCache.promise) return _orgCache.promise;
+    if (now - _orgCache.at < AUTH_CACHE_TTL) return _orgCache.value;
+  }
 
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("organizations")
-    .select("id, name, org_type, pairing_code")
-    .eq("id", profile.active_organization_id)
-    .maybeSingle();
+  const promise = (async () => {
+    const profile = await getProfile({ force });
+    if (!profile?.active_organization_id) return null;
 
-  if (error) throw error;
-  return data;
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("organizations")
+      .select("id, name, org_type, pairing_code")
+      .eq("id", profile.active_organization_id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  })();
+
+  _orgCache = { at: now, value: null, promise };
+  try {
+    const value = await promise;
+    _orgCache = { at: Date.now(), value, promise: null };
+    return value;
+  } catch (err) {
+    _orgCache = null;
+    throw err;
+  }
 }
 
 /** Klinik org için bağlı lab org id */

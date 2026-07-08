@@ -2,13 +2,11 @@ import { getActiveOrganization, getSession } from "../cloud/auth.js";
 import { listCaseMessages, sendCaseMessage, subscribeCaseMessages } from "../cloud/messages.js";
 import {
   countUnreadNotifications,
-  listNotifications,
   markAllNotificationsRead,
-  markNotificationRead,
   markNotificationsReadForCase,
   subscribeNotifications,
 } from "../cloud/notifications.js";
-import { CLOUD_CASE_STATUS_LABELS, listMessageThreads } from "../cloud/messagingHub.js";
+import { CLOUD_CASE_STATUS_LABELS, listMessageThreads, THREAD_PAGE_SIZE } from "../cloud/messagingHub.js";
 import { isCloudConfigured } from "../cloud/supabaseClient.js";
 
 const $ = (id) => document.getElementById(id);
@@ -17,7 +15,14 @@ let hubVisible = false;
 let activeOrgId = null;
 let activeThreadId = null;
 let threads = [];
+let threadsHasMore = false;
+let loadingMoreThreads = false;
 let threadFilter = "";
+let unreadTotal = 0;
+let chatHasMore = false;
+let oldestLoadedAt = null;
+let loadingOlderMessages = false;
+let realtimeRefreshTimer = null;
 let unsubscribeMessages = null;
 let unsubscribeNotifications = null;
 let onOpenCaseCallback = null;
@@ -60,6 +65,77 @@ function setHeaderBadge(count) {
   badge.classList.toggle("hidden", count === 0);
 }
 
+function applyUnreadTotal(count) {
+  unreadTotal = Math.max(0, Number(count) || 0);
+  setHeaderBadge(unreadTotal);
+}
+
+function adjustUnreadLocal(delta) {
+  applyUnreadTotal(unreadTotal + delta);
+}
+
+function scheduleRealtimeRefresh() {
+  if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(() => {
+    realtimeRefreshTimer = null;
+    refreshMessagesHubChrome().catch(() => {});
+  }, 700);
+}
+
+function applyNotificationRealtime(payload, eventType) {
+  const caseId = payload?.case_id;
+  if (!caseId) return;
+
+  const thread = threads.find((t) => t.caseId === caseId);
+  if (!thread) {
+    scheduleRealtimeRefresh();
+    return;
+  }
+
+  if (eventType === "insert") {
+    if (caseId === activeThreadId) {
+      scheduleRealtimeRefresh();
+      return;
+    }
+    thread.unreadCount = (thread.unreadCount || 0) + 1;
+    adjustUnreadLocal(1);
+    if (hubVisible) renderThreadList();
+    scheduleRealtimeRefresh();
+    return;
+  }
+
+  if (eventType === "update" && payload?.read_at) {
+    if ((thread.unreadCount || 0) > 0) {
+      thread.unreadCount -= 1;
+      adjustUnreadLocal(-1);
+      if (hubVisible) renderThreadList();
+    }
+    scheduleRealtimeRefresh();
+  }
+}
+
+async function syncUnreadChrome() {
+  try {
+    const count = await countUnreadNotifications();
+    applyUnreadTotal(count);
+    if (hubVisible) {
+      renderThreadList();
+    }
+  } catch (err) {
+    console.warn("[lab messagesHub] syncUnread:", err);
+  }
+}
+
+function afterCaseNotificationsRead(caseId) {
+  const thread = threads.find((t) => t.caseId === caseId);
+  if (thread && thread.unreadCount) {
+    const prev = thread.unreadCount;
+    thread.unreadCount = 0;
+    adjustUnreadLocal(-prev);
+  }
+  renderThreadList();
+}
+
 function scrollChatToEnd() {
   const list = $("hub-messages-list");
   if (list) list.scrollTop = list.scrollHeight;
@@ -82,6 +158,71 @@ function appendChatBubble(msg) {
   list.appendChild(div);
 }
 
+function buildChatBubble(msg) {
+  const mine = msg.author_org_id === activeOrgId;
+  const div = document.createElement("div");
+  div.className = `message-bubble ${mine ? "mine" : "theirs"}`;
+  div.dataset.messageId = msg.id;
+  div.innerHTML = `
+    <div class="text-[9px] uppercase tracking-wide text-lab-muted mb-0.5">${mine ? "Siz" : "Klinik"}</div>
+    <div>${escapeHtml(msg.body)}</div>
+    <div class="text-[9px] text-lab-muted mt-1">${formatMessageTime(msg.created_at)}</div>
+  `;
+  return div;
+}
+
+function renderLoadOlderButton() {
+  const list = $("hub-messages-list");
+  if (!list) return;
+  let btn = list.querySelector("[data-load-older]");
+  if (!chatHasMore) {
+    btn?.remove();
+    return;
+  }
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "hub-load-older";
+    btn.dataset.loadOlder = "1";
+    list.prepend(btn);
+  }
+  btn.textContent = loadingOlderMessages ? "Yükleniyor…" : "Daha eski mesajlar";
+  btn.disabled = loadingOlderMessages;
+}
+
+async function loadOlderMessages() {
+  if (!chatHasMore || loadingOlderMessages || !activeThreadId || !oldestLoadedAt) return;
+  const list = $("hub-messages-list");
+  if (!list) return;
+
+  loadingOlderMessages = true;
+  renderLoadOlderButton();
+  const prevHeight = list.scrollHeight;
+  const prevTop = list.scrollTop;
+
+  try {
+    const { messages, hasMore } = await listCaseMessages(activeThreadId, { before: oldestLoadedAt });
+    chatHasMore = hasMore;
+    if (messages.length) {
+      oldestLoadedAt = messages[0].created_at;
+      const anchor = list.querySelector("[data-load-older]");
+      const frag = document.createDocumentFragment();
+      for (const m of messages) {
+        if (list.querySelector(`[data-message-id="${m.id}"]`)) continue;
+        frag.appendChild(buildChatBubble(m));
+      }
+      if (anchor) anchor.after(frag);
+      else list.prepend(frag);
+      list.scrollTop = prevTop + (list.scrollHeight - prevHeight);
+    }
+  } catch (err) {
+    console.warn("[lab messagesHub] loadOlder:", err);
+  } finally {
+    loadingOlderMessages = false;
+    renderLoadOlderButton();
+  }
+}
+
 function renderThreadList() {
   const list = $("hub-thread-list");
   if (!list) return;
@@ -101,7 +242,7 @@ function renderThreadList() {
     return;
   }
 
-  list.innerHTML = filtered
+  const rows = filtered
     .map((t) => {
       const active = t.caseId === activeThreadId;
       const preview = t.lastMessage?.body
@@ -124,41 +265,33 @@ function renderThreadList() {
       `;
     })
     .join("");
+
+  const moreBtn =
+    threadsHasMore && !q
+      ? `<button type="button" class="hub-load-more" data-load-more-threads>${
+          loadingMoreThreads ? "Yükleniyor…" : "Daha fazla konuşma"
+        }</button>`
+      : "";
+
+  list.innerHTML = rows + moreBtn;
 }
 
-async function renderNotifications() {
-  const list = $("hub-notifications-list");
-  const countEl = $("hub-notifications-count");
-  if (!list) return;
-
+async function loadMoreThreads() {
+  if (!threadsHasMore || loadingMoreThreads) return;
+  loadingMoreThreads = true;
+  renderThreadList();
   try {
-    const items = await listNotifications({ limit: 40 });
-    const unread = items.filter((n) => !n.read_at).length;
-    if (countEl) {
-      countEl.textContent = String(unread);
-      countEl.classList.toggle("hidden", unread === 0);
+    const result = await listMessageThreads({ limit: THREAD_PAGE_SIZE, offset: threads.length });
+    const seen = new Set(threads.map((t) => t.caseId));
+    for (const t of result.threads || []) {
+      if (!seen.has(t.caseId)) threads.push(t);
     }
-
-    if (!items.length) {
-      list.innerHTML = `<p class="hub-empty">Bildirim yok</p>`;
-      return;
-    }
-
-    list.innerHTML = items
-      .map((n) => {
-        const unreadCls = n.read_at ? "" : "is-unread";
-        return `
-          <button type="button" class="hub-notification ${unreadCls}" data-notification-id="${n.id}" data-case-id="${n.case_id || ""}">
-            <div class="hub-notification-title">${escapeHtml(n.title || "Bildirim")}</div>
-            <div class="hub-notification-body">${escapeHtml(n.body || "")}</div>
-            <div class="hub-notification-time">${formatRelativeTime(n.created_at)}</div>
-          </button>
-        `;
-      })
-      .join("");
+    threadsHasMore = result.hasMore;
   } catch (err) {
-    list.innerHTML = `<p class="hub-empty">Bildirimler yüklenemedi</p>`;
-    console.warn("[lab messagesHub]", err);
+    console.warn("[lab messagesHub] loadMore:", err);
+  } finally {
+    loadingMoreThreads = false;
+    renderThreadList();
   }
 }
 
@@ -172,12 +305,14 @@ async function loadThreads(selectCaseId = null) {
   }
 
   activeOrgId = org.id;
-  const result = await listMessageThreads();
+  const [result, unread] = await Promise.all([
+    listMessageThreads({ limit: THREAD_PAGE_SIZE, offset: 0 }),
+    countUnreadNotifications().catch(() => 0),
+  ]);
   threads = result.threads || [];
+  threadsHasMore = result.hasMore;
 
-  const notifUnread = await countUnreadNotifications();
-  setHeaderBadge(notifUnread);
-
+  applyUnreadTotal(unread);
   renderThreadList();
 
   const pickId =
@@ -186,7 +321,11 @@ async function loadThreads(selectCaseId = null) {
     threads.find((t) => t.unreadCount > 0)?.caseId ||
     threads[0]?.caseId;
 
-  if (pickId) await selectThread(pickId, { skipReloadThreads: true });
+  if (pickId && pickId !== activeThreadId) {
+    await selectThread(pickId);
+  } else if (pickId) {
+    renderThreadList();
+  }
 }
 
 function teardownMessageRealtime() {
@@ -194,7 +333,7 @@ function teardownMessageRealtime() {
   unsubscribeMessages = null;
 }
 
-async function selectThread(caseId, { skipReloadThreads = false } = {}) {
+async function selectThread(caseId) {
   if (!caseId) return;
 
   activeThreadId = caseId;
@@ -215,24 +354,27 @@ async function selectThread(caseId, { skipReloadThreads = false } = {}) {
   const list = $("hub-messages-list");
   if (list) list.innerHTML = `<p class="hub-empty">Mesajlar yükleniyor…</p>`;
 
+  chatHasMore = false;
+  oldestLoadedAt = null;
   teardownMessageRealtime();
 
   try {
-    const messages = await listCaseMessages(caseId);
+    const { messages, hasMore } = await listCaseMessages(caseId);
+    chatHasMore = hasMore;
+    oldestLoadedAt = messages[0]?.created_at || null;
     if (list) {
       list.innerHTML = "";
       if (!messages.length) {
         list.innerHTML = `<p class="hub-empty">Henüz mesaj yok. Kliniğe ilk mesajı yazın.</p>`;
       } else {
+        renderLoadOlderButton();
         for (const m of messages) appendChatBubble(m);
       }
     }
     scrollChatToEnd();
 
     await markNotificationsReadForCase(caseId);
-    const t = threads.find((x) => x.caseId === caseId);
-    if (t) t.unreadCount = 0;
-    if (!skipReloadThreads) await loadThreads(caseId);
+    afterCaseNotificationsRead(caseId);
 
     unsubscribeMessages = subscribeCaseMessages(caseId, (msg) => {
       appendChatBubble(msg);
@@ -242,6 +384,14 @@ async function selectThread(caseId, { skipReloadThreads = false } = {}) {
         thread.lastMessage = msg;
         thread.updatedAt = msg.created_at;
         renderThreadList();
+      }
+      const mine = msg.author_org_id === activeOrgId;
+      if (!mine && caseId === activeThreadId) {
+        markNotificationsReadForCase(caseId)
+          .then(() => {
+            afterCaseNotificationsRead(caseId);
+          })
+          .catch(() => {});
       }
     });
   } catch (err) {
@@ -286,8 +436,8 @@ export function showMessagesTab(visible) {
   });
 
   if (visible) {
+    if (threads.length) renderThreadList();
     loadThreads().catch((err) => console.warn(err));
-    renderNotifications().catch(() => {});
   } else {
     teardownMessageRealtime();
     activeThreadId = null;
@@ -298,11 +448,18 @@ export async function refreshMessagesHubChrome() {
   if (!isCloudConfigured()) return;
 
   try {
-    const count = await countUnreadNotifications();
-    setHeaderBadge(count);
     if (hubVisible) {
-      await loadThreads(activeThreadId);
-      await renderNotifications();
+      const keep = Math.max(threads.length, THREAD_PAGE_SIZE);
+      const [result, unread] = await Promise.all([
+        listMessageThreads({ limit: keep, offset: 0 }),
+        countUnreadNotifications().catch(() => 0),
+      ]);
+      threads = result.threads || [];
+      threadsHasMore = result.hasMore;
+      applyUnreadTotal(unread);
+      renderThreadList();
+    } else {
+      await syncUnreadChrome();
     }
   } catch (err) {
     console.warn("[lab messagesHub] refresh:", err);
@@ -327,7 +484,9 @@ export function initMessagesHub({ onOpenCase } = {}) {
   $("btn-hub-mark-all-read")?.addEventListener("click", async () => {
     try {
       await markAllNotificationsRead();
-      await refreshMessagesHubChrome();
+      for (const t of threads) t.unreadCount = 0;
+      applyUnreadTotal(0);
+      renderThreadList();
     } catch (err) {
       alert(`İşlem başarısız: ${err.message}`);
     }
@@ -346,33 +505,35 @@ export function initMessagesHub({ onOpenCase } = {}) {
   });
 
   $("hub-thread-list")?.addEventListener("click", (e) => {
+    if (e.target.closest("[data-load-more-threads]")) {
+      loadMoreThreads().catch((err) => console.warn(err));
+      return;
+    }
     const btn = e.target.closest("[data-thread-id]");
     if (!btn) return;
     selectThread(btn.dataset.threadId).catch((err) => console.warn(err));
   });
 
-  $("hub-notifications-list")?.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-notification-id]");
-    if (!btn) return;
-    try {
-      await markNotificationRead(btn.dataset.notificationId);
-      if (btn.dataset.caseId) await selectThread(btn.dataset.caseId);
-      await renderNotifications();
-      await refreshMessagesHubChrome();
-    } catch (err) {
-      console.warn(err);
+  $("hub-messages-list")?.addEventListener("click", (e) => {
+    if (e.target.closest("[data-load-older]")) {
+      loadOlderMessages().catch((err) => console.warn(err));
     }
   });
 
   unsubscribeNotifications?.();
-  unsubscribeNotifications = subscribeNotifications(() => {
-    refreshMessagesHubChrome().catch(() => {});
-    if (hubVisible) renderNotifications().catch(() => {});
+  unsubscribeNotifications = subscribeNotifications((payload, eventType) => {
+    applyNotificationRealtime(payload, eventType);
   });
+
+  refreshMessagesHubChrome().catch(() => {});
 }
 
 export function disposeMessagesHub() {
   teardownMessageRealtime();
   unsubscribeNotifications?.();
   unsubscribeNotifications = null;
+  if (realtimeRefreshTimer) {
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = null;
+  }
 }

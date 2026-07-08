@@ -1,6 +1,6 @@
 # MeshPack — Oturum özeti ve devam listesi
 
-> Son güncelleme: **2026-07-07**  
+> Son güncelleme: **2026-07-08**  
 > Kapanıp açıldığında buradan devam edin. Detaylı yol haritası için `todo.md`.
 
 ---
@@ -9,9 +9,10 @@
 
 | Commit | Mesaj |
 |--------|--------|
+| `51363dc` | CasePackage ZIP'e alignment.json export et; lab önizlemede paket hizasını uygula. |
 | `8abdeb1` | MeshPack Cloud, Lab uygulaması ve vaka mesajlaşma merkezini ekle. |
 
-**Henüz commit edilmemiş değişiklikler var** (hizalama export, ana sayfa HTML fix sonrası düzeltmeler). Aşağıda “Bu oturumda commit dışı” bölümüne bakın.
+**Working tree temiz** — commit dışı değişiklik yok.
 
 ---
 
@@ -46,11 +47,12 @@
 
 Özellikler: konuşma listesi, arama, okunmamış rozet, realtime mesaj, bildirim merkezi, “tümünü okundu işaretle”, vakaya git / planlamada aç.
 
-### Lab önizleme ve hizalama (kısmen)
+### Lab önizleme ve hizalama
 
 - Önizleme infinite loop / titreme sorunları giderildi (`previewKey`, queue refresh patch)
 - Klinik ile aynı mantık: varsayılan **tarayıcı hizası**; otomatik ICP yok
-- **Commit dışı (henüz kaydedilmedi):** ZIP export'a `alignment.json` eklendi; planlama ve Drive upload hizayı paketliyor; lab `mode !== "scanner"` ise paket hizasını uyguluyor
+- ZIP export'a `alignment.json` eklendi (`51363dc`); planlama ve Drive upload hizayı paketliyor; lab `mode !== "scanner"` ise paket hizasını uyguluyor
+- **Doğrulama bekliyor:** MP-2026-0006 ile yeniden gönderip lab önizlemesini klinik planlama ile karşılaştır
 
 ### Diğer klinik işleri (önceki commit'te)
 
@@ -65,21 +67,9 @@
 
 ---
 
-## Bu oturumda commit dışı kalan dosyalar
+## Commit dışı dosyalar
 
-```
-src/alignment.js          — buildAlignmentPackage, resolveAlignmentFromSession
-src/viewer.js             — applyAlignmentPackage, getAlignmentExport
-src/planningPage.js       — alignment export + planlama yüklemede hiza
-src/main.js               — planlamaya hiza aktarımı
-src-tauri/src/lib.rs      — export_case_zip alignment parametresi
-src-tauri/src/compression.rs
-meshpack-lab/src/ui/app.js       — debug sadece DEV; hiza mode kontrolü
-meshpack-lab/src/ui/meshPreview.js
-todo.md
-```
-
-**Sonraki açılışta:** `git status` ile kontrol et; istersen ayrı commit: *"alignment.json export ve lab önizleme hizası"*.
+Yok — son commit: `51363dc`.
 
 ---
 
@@ -118,9 +108,9 @@ npm run tauri dev
 
 ## Yapmamız gerekenler (öncelik sırası)
 
-### 🔴 Hemen (bir sonraki oturum)
+### 🔴 Hemen (şimdi)
 
-1. **Commit** — commit dışı hizalama değişikliklerini kaydet
+1. ~~**Commit** — hizalama değişiklikleri~~ ✅ `51363dc`
 2. **Uçtan uca cloud testi**
    - Klinik: Cloud giriş → lab bağlı → vaka planla → **MeshPack Lab'a gönder**
    - Lab: kuyrukta görünsün → ZIP indir → önizleme hizalı mı?
@@ -134,11 +124,12 @@ npm run tauri dev
 
 | # | Konu | Not |
 |---|------|-----|
-| 4 | Desktop bildirimleri | Tauri notification plugin; şu an yalnızca in-app |
-| 5 | Cloud E2E şifreleme | Token kasası var; vaka paketi E2E henüz yok |
-| 6 | Durum senkronu polish | `received` → `in_production` → `shipped` akışı test |
-| 7 | Offline gönderim kuyruğu | `todo.md` E5 |
-| 8 | `origin/main` push | Son commit local'de; remote'a gönderilmedi |
+| 4 | **Lab Mobile (kısıtlı)** | Mesaj + push + vaka özeti; dosya/3D yok — [`docs/LAB_MOBILE.md`](docs/LAB_MOBILE.md) |
+| 5 | Desktop bildirimleri | Tauri notification plugin; şu an yalnızca in-app |
+| 6 | Cloud E2E şifreleme | Token kasası var; vaka paketi E2E henüz yok |
+| 7 | Durum senkronu polish | `received` → `in_production` → `shipped` akışı test |
+| 8 | Offline gönderim kuyruğu | `todo.md` E5 |
+| 9 | `origin/main` push | Son commit local'de; remote'a gönderilmedi |
 
 ### 🟢 İyileştirme / polish
 
@@ -163,6 +154,7 @@ npm run tauri dev
 | ZIP export (Rust) | `src-tauri/src/compression.rs` |
 | Storage RLS fix | `supabase/migrations/20260707124500_fix_case_package_select_policy.sql` |
 | CasePackage spec | `docs/CASE_PACKAGE.md` |
+| Lab mobil mimari | `docs/LAB_MOBILE.md` |
 | Yol haritası | `todo.md` |
 
 ---
@@ -171,6 +163,7 @@ npm run tauri dev
 
 - Mesajlar **ayrı bölüm** — klinikte header butonu, lab'da sekme; bildirimler dahil
 - Varsayılan hizalama: **tarayıcı**; ICP ayrı ve dikkatli kullanım
+- **Platform:** Klinik + Lab desktop (Tauri) devam; Lab için **mobil companion** (mesaj/bildirim/özet) — tam web veya tam mobil lab yok
 - Commit/PR yalnızca kullanıcı isteyince
 - Türkçe UI
 
@@ -185,12 +178,12 @@ npm run tauri dev
 
 ---
 
-## Önerilen ilk 3 adım (yarın)
+## Önerilen ilk 3 adım
 
 ```
-1. git status → hizalama değişikliklerini commit et
-2. MP-2026-0006 (veya yeni vaka) ile cloud gönder + lab önizleme + mesaj testi
-3. Hiza sorunu devam ederse: klinik planlama viewer vs lab meshPreview karşılaştırması
+1. MP-2026-0006 ile cloud gönder + lab önizleme + mesaj testi (iki uygulama açık)
+2. Hiza sorunu devam ederse: klinik planlama viewer vs lab meshPreview karşılaştırması
+3. Testler geçerse: git push origin main
 ```
 
 ---

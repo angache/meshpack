@@ -19,6 +19,7 @@ import {
   updateCaseStatus,
 } from "../cloud/cases.js";
 import { listCaseMessages, sendCaseMessage, subscribeCaseMessages } from "../cloud/messages.js";
+import { markNotificationsReadForCase } from "../cloud/notifications.js";
 import { isCloudConfigured } from "../cloud/supabaseClient.js";
 import { MeshPreview } from "./meshPreview.js";
 import { initMessagesHub, refreshMessagesHubChrome, showMessagesTab } from "./messagesHubUI.js";
@@ -242,6 +243,16 @@ function clearCaseUnread(caseId) {
   state.unreadCaseIds.delete(caseId);
   state.unreadMessagesByCase.delete(caseId);
   updateUnreadBadges();
+}
+
+async function markCaseNotificationsRead(caseId) {
+  if (!caseId) return;
+  try {
+    await markNotificationsReadForCase(caseId);
+    await refreshMessagesHubChrome();
+  } catch (err) {
+    console.warn("[lab] notifications read:", err);
+  }
 }
 
 function showAuthTab(tab) {
@@ -476,6 +487,7 @@ async function selectCase(caseId, markReceived = true) {
       });
     }
     await loadMessages(caseId);
+    await markCaseNotificationsRead(caseId);
     setupMessageRealtime(caseId);
   } catch (err) {
     alert(`Vaka yüklenemedi: ${err.message}`);
@@ -661,7 +673,7 @@ async function loadMessages(caseId) {
   list.innerHTML = `<p class="text-xs text-lab-muted">Mesajlar yükleniyor…</p>`;
 
   try {
-    const messages = await listCaseMessages(caseId);
+    const { messages } = await listCaseMessages(caseId);
     list.innerHTML = "";
     if (!messages.length) {
       list.innerHTML = `<p class="text-xs text-lab-muted">Henüz mesaj yok. Kliniğe ilk mesajı yazın.</p>`;
@@ -718,12 +730,15 @@ function setupMessageRealtime(caseId) {
     appendMessageBubble(msg);
     $("messages-list").scrollTop = $("messages-list")?.scrollHeight || 0;
     const mine = msg.author_org_id === state.org?.id;
-    const currentlyReading = caseId === state.selectedId && document.hasFocus();
-    if (!mine && !currentlyReading) {
+    const viewingThisCase = caseId === state.selectedId;
+    if (!mine && viewingThisCase) {
+      markCaseNotificationsRead(caseId);
+    } else if (!mine) {
       const current = Number(state.unreadMessagesByCase.get(caseId) || 0);
       state.unreadMessagesByCase.set(caseId, current + 1);
       state.unreadCaseIds.add(caseId);
       updateUnreadBadges();
+      refreshMessagesHubChrome().catch(() => {});
       showRealtimeBanner(`Yeni mesaj: ${state.selectedCase?.case_number || "vaka"}`);
     }
   });

@@ -1,6 +1,8 @@
 import { getActiveOrganization } from "./cloud/auth.js";
 import { listCaseMessages, sendCaseMessage, subscribeCaseMessages } from "./cloud/messages.js";
+import { markNotificationsReadForCase } from "./cloud/notifications.js";
 import { isCloudConfigured } from "./cloud/supabaseClient.js";
+import { openMessagesHub, refreshMessagesHubChrome } from "./messagesHubUI.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -73,7 +75,7 @@ async function loadMessages(caseId) {
   list.innerHTML = `<p class="text-[10px] mp-text-faint px-1">Mesajlar yükleniyor…</p>`;
 
   try {
-    const messages = await listCaseMessages(caseId);
+    const { messages } = await listCaseMessages(caseId);
     list.innerHTML = "";
     if (!messages.length) {
       list.innerHTML = `<p class="text-[10px] mp-text-faint px-1">Henüz mesaj yok. Laboratuvara ilk mesajı yazın.</p>`;
@@ -110,8 +112,6 @@ async function sendPlanningMessage() {
     input?.focus();
   }
 }
-
-import { openMessagesHub } from "./messagesHubUI.js";
 
 export function bindPlanningCaseMessages() {
   if (bound) return;
@@ -166,10 +166,18 @@ export async function openPlanningCaseMessages(caseRow) {
   $("btn-planning-lab-send-message")?.removeAttribute("disabled");
 
   await loadMessages(caseRow.id);
+  await markNotificationsReadForCase(caseRow.id);
+  await refreshMessagesHubChrome();
 
   unsubscribe = subscribeCaseMessages(caseRow.id, (msg) => {
     appendMessageBubble(msg);
     scrollMessagesToEnd();
+    const mine = msg.author_org_id === activeOrgId;
+    if (!mine) {
+      markNotificationsReadForCase(caseRow.id)
+        .then(() => refreshMessagesHubChrome())
+        .catch(() => {});
+    }
   });
 }
 

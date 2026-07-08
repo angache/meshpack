@@ -1950,6 +1950,33 @@ html[data-density="compact"] #file-browser-root { padding-left: 0.75rem; padding
   color: rgb(var(--mp-accent));
 }
 
+.messages-hub-load-more,
+.messages-hub-load-older {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  margin: 0.25rem 0;
+  border: 1px dashed rgb(var(--mp-border));
+  border-radius: 0.5rem;
+  background: transparent;
+  color: rgb(var(--mp-muted));
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.messages-hub-load-more:hover:not(:disabled),
+.messages-hub-load-older:hover:not(:disabled) {
+  background: rgb(var(--mp-elevated) / 0.4);
+  color: rgb(var(--mp-text));
+}
+
+.messages-hub-load-more:disabled,
+.messages-hub-load-older:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .messages-hub-messages-list {
   display: flex;
   flex-direction: column;
