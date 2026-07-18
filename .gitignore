@@ -7,3 +7,6 @@ src-tauri/target/
 .env
 .env.local
 .env.*.local
+
+# Yerel tarayıcı örnekleri / hasta verileri
+farklı marka taramalar/
