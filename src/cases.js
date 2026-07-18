@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export const CASE_STATUS = {
-  linked: { label: "Bağlandı", cls: "case-status-linked" },
-  planning: { label: "Planlanıyor", cls: "case-status-planning" },
-  ready_to_send: { label: "Gönderime hazır", cls: "case-status-ready" },
-  sent: { label: "Gönderildi", cls: "case-status-sent" },
+  linked: { label: "Yeni bağlandı", cls: "case-status-linked" },
+  planning: { label: "Hazırlanıyor", cls: "case-status-planning" },
+  ready_to_send: { label: "Göndermeye hazır", cls: "case-status-ready" },
+  sent: { label: "Lab'a gitti", cls: "case-status-sent" },
 };
 
 export async function getCase(caseId) {
@@ -79,6 +79,10 @@ export async function reassignScan(filePath, toPatientId, toCaseId, reason) {
     toCaseId,
     reason,
   });
+}
+
+export async function deleteCase(caseId, reason) {
+  return invoke("delete_case", { caseId, reason });
 }
 
 export function caseStatusMeta(status) {

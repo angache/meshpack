@@ -1,43 +1,16 @@
 /**
- * Tarayıcı dosya adı formatı (3Shape TRIOS vb.):
- *   {HastaOnEki}UpperJawScan.ply
- *   {HastaOnEki}LowerJawScan.ply
- *   {HastaOnEki}BiteScan.ply
- *
- * Önerilen önek: Soyad-Ad → Yilmaz-AhmetUpperJawScan.ply
+ * Ortak yardımcılar — ölçü dosyası ayrıştırma: ./scanFilename.js
  */
-const SCAN_EXTENSIONS = /\.(stl|ply|dcm)$/i;
+import {
+  classifyScanType,
+  extractFileStem,
+  extractCaseOrderRef,
+  isScanFile,
+  parseScanFilename,
+  SCAN_LABELS,
+} from "./scanFilename.js";
 
-const DATE_PATTERNS = [
-  /_\d{4}[-_]\d{2}[-_]\d{2}/,
-  /_\d{8}/,
-  /_\d{2}\.\d{2}\.\d{4}/,
-];
-
-const SCANNER_SUFFIXES = [
-  { type: "upper", match: /UpperJawScan/i, strip: /_?UpperJawScan$/i },
-  { type: "lower", match: /(?:Lower|Lowe)JawScan/i, strip: /_?(?:Lower|Lowe)JawScan$/i },
-  { type: "bite", match: /BiteScan\d*/i, strip: /_?BiteScan\d*$/i },
-];
-
-const LEGACY_TYPE_PATTERNS = {
-  upper: [
-    /upper/i, /maxilla/i, /ust[\s_-]?cene/i, /üst[\s_-]?çene/i,
-    /maxillary/i, /jaw[\s_-]?upper/i,
-  ],
-  lower: [
-    /lower/i, /mandible/i, /mandibular/i, /alt[\s_-]?cene/i,
-    /alt[\s_-]?çene/i, /jaw[\s_-]?lower/i,
-  ],
-  bite: [
-    /occlusion/i, /okluz/i, /okluzyon/i, /kapan/i,
-    /articulation/i, /vestibular/i, /registration/i,
-  ],
-};
-
-function baseName(filename) {
-  return filename.replace(SCAN_EXTENSIONS, "");
-}
+export { classifyScanType, extractFileStem, isScanFile, parseScanFilename, SCAN_LABELS, extractCaseOrderRef };
 
 function capitalizePart(part) {
   if (!part) return "";
@@ -64,39 +37,12 @@ function formatPatientName(stem) {
     .join(" ");
 }
 
-function stripScannerSuffix(base) {
-  for (const { strip } of SCANNER_SUFFIXES) {
-    const cleaned = base.replace(strip, "");
-    if (cleaned !== base) return cleaned;
-  }
-  return null;
-}
-
-/** Dosya adından ham hasta öneki (tarama tipi ve tarih sonekleri çıkarılmış) */
-export function extractFileStem(filename) {
-  let base = baseName(filename);
-
-  for (const pattern of DATE_PATTERNS) {
-    base = base.replace(pattern, "");
-  }
-
-  const fromScanner = stripScannerSuffix(base);
-  if (fromScanner !== null) {
-    return fromScanner.replace(/_+$/, "").replace(/^_+/, "").trim();
-  }
-
-  for (const patterns of Object.values(LEGACY_TYPE_PATTERNS)) {
-    for (const p of patterns) {
-      base = base.replace(p, "");
-    }
-  }
-
-  return base.replace(/_+$/, "").replace(/^_+/, "").trim();
-}
-
 /** Dosya önekinden önerilen görünen ad — tire (-) varsa soyad-ad ayrımı */
 export function parseSuggestedName(stem) {
   if (!stem) return "Bilinmeyen Hasta";
+
+  const orderId = extractCaseOrderRef(stem) || stem.match(/^itero-(\d+)$/i)?.[1];
+  if (orderId) return `iTero #${orderId}`;
 
   if (stem.includes("-")) {
     return stem
@@ -132,33 +78,10 @@ export function patientKey(name) {
   return patientKeyFromStem(name);
 }
 
-/**
- * @returns {'upper' | 'lower' | 'bite' | 'unknown'}
- */
-export function classifyScanType(filename) {
-  const base = baseName(filename);
-
-  for (const { match, type } of SCANNER_SUFFIXES) {
-    if (match.test(base)) return type;
-  }
-
-  for (const [type, patterns] of Object.entries(LEGACY_TYPE_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (pattern.test(base)) return type;
-    }
-  }
-
-  return "unknown";
-}
-
 export function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function isScanFile(filename) {
-  return SCAN_EXTENSIONS.test(filename);
 }
 
 function dayKey(timestamp) {
@@ -180,7 +103,7 @@ export function groupFilesIntoSessions(files) {
         id: dk,
         dayKey: dk,
         modifiedAt: 0,
-        scans: { upper: null, lower: null, bite: null },
+        scans: { upper: null, lower: null, bite: null, bite2: null },
         files: [],
       });
     }
@@ -190,11 +113,18 @@ export function groupFilesIntoSessions(files) {
     session.modifiedAt = Math.max(session.modifiedAt, file.modified_at);
 
     const type = file.scanType;
-    if (type === "upper" || type === "lower" || type === "bite") {
+    if (type === "upper" || type === "lower") {
       const existing = session.scans[type];
       if (!existing || file.modified_at > existing.modified_at) {
         session.scans[type] = file;
       }
+    } else if (type === "bite") {
+      const bites = session.files
+        .filter((f) => f.scanType === "bite")
+        .sort((a, b) => (b.modified_at || 0) - (a.modified_at || 0))
+        .slice(0, 2);
+      session.scans.bite = bites[0] || null;
+      session.scans.bite2 = bites[1] || null;
     }
   }
 
@@ -205,15 +135,28 @@ export function groupFilesByPatient(files) {
   const groups = new Map();
 
   for (const file of files) {
+    const orderRef =
+      file.caseRef ||
+      extractCaseOrderRef(file.filename) ||
+      extractCaseOrderRef(file.fileStem) ||
+      (file.packageId && String(file.packageId).match(/(\d{5,})/)?.[1]) ||
+      "";
     const stem = file.fileStem || extractFileStem(file.filename);
-    const key = patientKeyFromStem(stem);
+    const key = orderRef
+      ? patientKeyFromStem(`itero-${orderRef}`)
+      : patientKeyFromStem(stem);
+    const fileStem = orderRef ? `itero-${orderRef}` : stem;
+    const suggestedName =
+      file.suggestedName ||
+      (orderRef ? `iTero #${orderRef}` : parseSuggestedName(stem));
 
     if (!groups.has(key)) {
       groups.set(key, {
         key,
-        fileStem: stem,
-        suggestedName: parseSuggestedName(stem),
+        fileStem,
+        suggestedName,
         allFiles: [],
+        orderRef: orderRef || null,
       });
     }
 
@@ -221,6 +164,10 @@ export function groupFilesByPatient(files) {
     group.allFiles.push(file);
     group.latestModified = Math.max(group.latestModified || 0, file.modified_at);
     group.fileCount = group.allFiles.length;
+    if (file.suggestedName && !orderRef) group.suggestedName = file.suggestedName;
+    else if (file.suggestedName && orderRef && !/^iTero #/i.test(file.suggestedName)) {
+      group.suggestedName = file.suggestedName;
+    }
   }
 
   return Array.from(groups.values())
@@ -236,6 +183,7 @@ export function groupFilesByPatient(files) {
         latestModified: latest.modifiedAt || group.latestModified || 0,
         fileCount: group.fileCount,
         allFiles: group.allFiles,
+        orderRef: group.orderRef,
       };
     })
     .sort((a, b) => b.latestModified - a.latestModified);
@@ -276,6 +224,33 @@ export function getPatientScanCount(group) {
   return ["upper", "lower", "bite"].filter((t) => group.scans?.[t]).length;
 }
 
+/** Bağlama güvenliği — eksik set kontrolü */
+export function analyzeLinkCompleteness(files) {
+  const enriched = (files || []).map((f) => ({
+    ...f,
+    scanType: f.scanType || classifyScanType(f.filename),
+  }));
+  const hasUpper = enriched.some((f) => f.scanType === "upper");
+  const hasLower = enriched.some((f) => f.scanType === "lower");
+  const hasBite = enriched.some((f) => f.scanType === "bite");
+  const missing = [];
+  if (!hasUpper) missing.push("üst çene");
+  if (!hasLower) missing.push("alt çene");
+  if (!hasBite) missing.push("kapanış");
+
+  return {
+    hasUpper,
+    hasLower,
+    hasBite,
+    missing,
+    /** Üst+alt+kapanış — tek tıkla bağlama için zorunlu */
+    isComplete: hasUpper && hasLower && hasBite,
+    /** En az üst+alt */
+    hasJaws: hasUpper && hasLower,
+    files: enriched,
+  };
+}
+
 /** Görünen ad veya dosya önekinden soyad/ad ayrımı */
 export function splitPatientName(displayName, fileStem = null) {
   if (fileStem?.includes("-")) {
@@ -301,8 +276,3 @@ export function needsNamingHint(fileStem) {
   return !fileStem.includes("-") && !fileStem.includes("_");
 }
 
-export const SCAN_LABELS = {
-  upper: "Üst Çene",
-  lower: "Alt Çene",
-  bite: "Kapanış",
-};

@@ -157,6 +157,9 @@ pub fn scan_action_summary(action: &str, file_path: Option<&str>, reason: Option
         "detach" => "Ölçü kaldırıldı".to_string(),
         "case_create" => "Vaka oluşturuldu".to_string(),
         "reject_suggestion" => "Hasta önerisi reddedildi".to_string(),
+        "dismiss_group" => "Ölçü grubu listeden kaldırıldı".to_string(),
+        "restore_group" => "Gizlenen ölçü grubu geri alındı".to_string(),
+        "case_delete" => "Vaka kaldırıldı".to_string(),
         other => other.to_string(),
     }];
     if !file.is_empty() {

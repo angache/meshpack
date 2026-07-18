@@ -2,7 +2,7 @@ import { patientKeyFromStem } from "../utils.js";
 
 /**
  * Tarayıcıdan bağımsız dosya öneki normalizasyonu.
- * 3Shape, Medit, iTero vb. farklı adlandırmalar aynı anahtara indirgenir.
+ * Ayrıştırma kuralları: ../scanFilename.js
  */
 
 export function normalizeStemKey(stem) {

@@ -1,0 +1,358 @@
+
+/* ─── UI v2 — sadeleştirilmiş klinik arayüzü ─── */
+
+.ui-v2 .ui-v2-header-extra {
+  display: none !important;
+}
+
+.ui-v2 .ui-v2-header-extra.mp-cloud-badge.is-online {
+  display: none !important;
+}
+
+.ui-v2 #status-badge.active {
+  display: inline-flex !important;
+}
+
+.ui-v2-inbox-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgb(var(--mp-orange) / 0.2);
+  color: rgb(var(--mp-orange));
+  border: 1px solid rgb(var(--mp-orange) / 0.35);
+}
+
+/* Hasta yokken: gelen kutusu tam genişlik, boş sağ panel yok */
+.ui-v2-layout:not(.has-patient) #patient-workspace {
+  display: none !important;
+}
+
+.ui-v2-layout:not(.has-patient) #patient-list-panel {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  border-right: none;
+}
+
+.ui-v2-layout:not(.has-patient) .file-browser {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  max-width: 56rem;
+  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-v2-layout:not(.has-patient) .ui-v2-inbox-section {
+  max-height: none;
+}
+
+.ui-v2-layout:not(.has-patient) .ui-v2-patients-section {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+/* Hasta seçilince: klasik yan yana */
+.ui-v2-layout.has-patient #patient-list-panel {
+  width: 17rem;
+  flex-shrink: 0;
+}
+
+.ui-v2-layout.has-patient #patient-workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-v2-layout.has-patient .file-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ui-v2-layout.has-patient .ui-v2-inbox-section {
+  max-height: 38%;
+}
+
+.ui-v2-detail-empty {
+  display: none;
+}
+
+.ui-v2-section-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(var(--mp-text));
+}
+
+/* Gelen kutusu hero */
+.ui-v2-inbox-hero {
+  padding: 1.125rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(var(--mp-accent) / 0.3);
+  background: rgb(var(--mp-accent) / 0.06);
+}
+
+.ui-v2-inbox-hero-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: rgb(var(--mp-text));
+  margin: 0 0 0.35rem;
+}
+
+.ui-v2-inbox-hero-sub {
+  font-size: 0.8125rem;
+  color: rgb(var(--mp-text-muted));
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+.ui-v2-inbox-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ui-v2-inbox-hero-actions .mp-btn-primary {
+  flex: 1 1 8rem;
+  font-size: 0.8125rem;
+  padding: 0.55rem 0.85rem;
+}
+
+.ui-v2-inbox-hero-actions .mp-btn-secondary {
+  flex: 1 1 8rem;
+  font-size: 0.8125rem;
+}
+
+.ui-v2-inbox-more {
+  margin-top: 0.5rem;
+}
+
+.ui-v2-inbox-more summary {
+  font-size: 0.75rem;
+  color: rgb(var(--mp-text-muted));
+  cursor: pointer;
+  list-style: none;
+  padding: 0.35rem 0;
+}
+
+.ui-v2-inbox-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-v2-inbox-link-row {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(var(--mp-border) / 0.6);
+}
+
+.ui-v2-inbox-link-row button {
+  font-size: 0.6875rem;
+  color: rgb(var(--mp-text-faint));
+}
+
+/* Hasta listesi */
+.ui-v2-patient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ui-v2-patient-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(var(--mp-border));
+  background: rgb(var(--mp-elevated) / 0.45);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.ui-v2-patient-card:hover {
+  background: rgb(var(--mp-hover));
+}
+
+.ui-v2-patient-card.is-selected {
+  border-color: rgb(var(--mp-accent) / 0.45);
+  background: rgb(var(--mp-accent) / 0.1);
+  box-shadow: inset 3px 0 0 rgb(var(--mp-accent));
+}
+
+.ui-v2-patient-card.is-action {
+  border-color: rgb(var(--mp-orange) / 0.35);
+}
+
+.ui-v2-patient-card-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--mp-text));
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-v2-patient-card-status {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  text-transform: none !important;
+  letter-spacing: normal;
+}
+
+/* Hasta detay */
+.ui-v2-patient-hero {
+  padding: 0.75rem 1rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid rgb(var(--mp-border));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ui-v2-patient-hero #btn-ui-v2-back {
+  align-self: flex-start;
+  margin-left: -0.25rem;
+}
+
+.ui-v2-patient-hero h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  color: rgb(var(--mp-text));
+}
+
+.ui-v2-status-line {
+  font-size: 0.8125rem;
+  color: rgb(var(--mp-text-muted));
+  margin: 0 0 1rem;
+}
+
+.ui-v2-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: rgb(var(--mp-accent));
+  color: white;
+  transition: filter 0.12s;
+}
+
+.ui-v2-cta-primary:hover {
+  filter: brightness(1.08);
+}
+
+.ui-v2-cta-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ui-v2-scan-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.ui-v2-collapsible {
+  border-bottom: 1px solid rgb(var(--mp-border));
+}
+
+.ui-v2-collapsible summary {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(var(--mp-text-muted));
+  cursor: pointer;
+  list-style: none;
+}
+
+.ui-v2-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-v2-collapsible-body {
+  padding: 0 1rem 1rem;
+}
+
+.ui-v2-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0;
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid rgb(var(--mp-border) / 0.5);
+  font-size: 0.75rem;
+  color: rgb(var(--mp-text));
+  cursor: pointer;
+}
+
+.ui-v2-history-item:last-child {
+  border-bottom: none;
+}
+
+.ui-v2-history-item.is-active {
+  color: rgb(var(--mp-accent));
+  font-weight: 500;
+}
+
+.ui-v2-expert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ui-v2-preview .viewer-compact {
+  height: min(42vh, 22rem);
+  min-height: 12rem;
+}
+
+.ui-v2 .case-status-pill {
+  text-transform: none !important;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.ui-v2 .patient-suggest-badge {
+  display: none;
+}
+
+.ui-v2 .group-filters-ui-v2 {
+  display: none;
+}
+
+.ui-v2-inbox-compact.measure-group-card {
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.ui-v2 .patient-table {
+  display: none;
+}
+
+.ui-v2 #patient-list-meta {
+  display: none !important;
+}

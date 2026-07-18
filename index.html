@@ -5,14 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MeshPack — Diş Tarama Yöneticisi</title>
     <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/ui-extensions.css" />
   </head>
   <body class="overflow-hidden select-none h-screen w-screen">
     <div id="app" class="w-full h-full flex flex-col">
       <!-- Üst bar -->
       <header class="mp-header flex items-center justify-between px-4 py-2 shrink-0">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-medical-accent/20 flex items-center justify-center text-lg">🦷</div>
-          <span class="font-semibold text-sm tracking-wide mp-text-title">MeshPack</span>
+          <button id="btn-go-main" type="button" class="mp-brand-home flex items-center gap-3 rounded-lg px-1 py-0.5 -ml-1 shrink-0" title="Ana ekrana dön (Esc)">
+            <div class="w-8 h-8 rounded-lg bg-medical-accent/20 mp-brand-icon flex items-center justify-center">
+              <i data-lucide="scan-line" class="mp-icon mp-icon-lg" aria-hidden="true"></i>
+            </div>
+            <span class="font-semibold text-sm tracking-wide mp-text-title">MeshPack</span>
+          </button>
           <button id="main-cloud-badge" type="button" class="mp-cloud-badge is-offline" title="MeshPack Cloud ayarlarını aç">
             <span id="main-cloud-dot" class="mp-cloud-dot"></span>
             <span id="main-cloud-text">Cloud bağlı değil</span>
@@ -27,37 +32,70 @@
         </div>
         <div class="flex items-center gap-2">
           <span id="header-user-label" class="hidden text-[10px] mp-text-muted px-2 py-0.5 rounded border mp-border"></span>
-          <button id="btn-header-messages" type="button" class="mp-btn-ghost text-xs px-3 py-1 rounded relative hidden" title="Mesajlar ve bildirimler">
-            💬 Mesajlar
+          <button id="btn-header-scans" type="button" class="mp-btn-ghost mp-btn-with-icon text-xs px-3 py-1 rounded relative" title="Bekleyen ölçü setleri">
+            <i data-lucide="layers" class="mp-icon mp-icon-sm"></i>
+            <span>Ölçüler</span>
+            <span id="header-scans-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full text-[9px] font-medium bg-medical-green text-white flex items-center justify-center">0</span>
+          </button>
+          <button id="btn-header-messages" type="button" class="mp-btn-ghost mp-btn-with-icon text-xs px-3 py-1 rounded relative hidden" title="Mesajlar ve bildirimler">
+            <i data-lucide="message-circle" class="mp-icon mp-icon-sm"></i>
+            <span>Mesajlar</span>
             <span id="header-messages-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full text-[9px] font-medium bg-medical-accent text-white flex items-center justify-center">0</span>
           </button>
-          <button id="btn-maximize" class="mp-btn-ghost text-xs px-2 py-1 rounded" title="Tam ekran (F11)">⛶</button>
-          <button id="btn-settings" class="mp-btn-ghost text-xs px-3 py-1 rounded" title="Ayarlar">⚙️ Ayarlar</button>
+          <button id="btn-maximize" class="mp-btn-ghost mp-icon-btn text-xs px-2 py-1 rounded" title="Tam ekran (F11)">
+            <i data-lucide="maximize-2" class="mp-icon mp-icon-sm"></i>
+          </button>
+          <button id="btn-settings" class="mp-btn-ghost mp-btn-with-icon text-xs px-3 py-1 rounded" title="Ayarlar">
+            <i data-lucide="settings" class="mp-icon mp-icon-sm"></i>
+            <span>Ayarlar</span>
+          </button>
         </div>
       </header>
-
-      <!-- Yeni ölçü bildirimi -->
-      <div id="new-scan-banner" class="hidden shrink-0 px-4 py-2 bg-medical-green/15 border-b border-medical-green/30 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="w-2 h-2 rounded-full bg-medical-green animate-pulse shrink-0"></span>
-          <span id="new-scan-banner-text" class="text-xs text-medical-green font-medium truncate">Yeni ölçü algılandı</span>
-        </div>
-        <button id="btn-goto-new-scan" type="button" class="shrink-0 text-[10px] px-2.5 py-1 rounded bg-medical-green/20 text-medical-green border border-medical-green/40 hover:bg-medical-green/30 transition-colors">
-          Görüntüle →
-        </button>
-      </div>
 
       <!-- Bağlantı sonrası planlama önerisi -->
       <div id="planning-prompt-banner" class="hidden shrink-0 px-4 py-2 bg-medical-accent/12 border-b border-medical-accent/30 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="text-sm shrink-0">📋</span>
+          <span class="text-sm shrink-0 mp-brand-icon">
+            <i data-lucide="clipboard-list" class="mp-icon mp-icon-md"></i>
+          </span>
           <span id="planning-prompt-text" class="text-xs mp-text-secondary font-medium truncate">Ölçü bağlandı</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <button id="btn-goto-planning" type="button" class="text-[10px] px-2.5 py-1 rounded bg-medical-accent/25 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/35 transition-colors font-semibold">
-            Planlamaya geç →
+          <button id="btn-goto-planning" type="button" class="mp-btn-with-icon text-[10px] px-2.5 py-1 rounded bg-medical-accent/25 text-medical-accent border border-medical-accent/40 hover:bg-medical-accent/35 transition-colors font-semibold">
+            <span>Planlamaya geç</span>
+            <i data-lucide="arrow-right" class="mp-icon mp-icon-xs"></i>
           </button>
-          <button id="btn-dismiss-planning-prompt" type="button" class="mp-btn-ghost text-[10px] px-1.5 py-1 rounded mp-text-faint" title="Kapat">✕</button>
+          <button id="btn-dismiss-planning-prompt" type="button" class="mp-btn-ghost mp-icon-btn text-[10px] px-1.5 py-1 rounded mp-text-faint" title="Kapat" aria-label="Kapat">
+            <i data-lucide="x" class="mp-icon mp-icon-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ölçüler merkezi -->
+      <div id="scans-inbox-view" class="hidden flex flex-1 min-h-0 flex-col">
+        <div class="scans-inbox-toolbar shrink-0 flex items-center justify-between px-4 py-2 mp-border-b gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <button id="btn-scans-inbox-back" type="button" class="mp-hub-back-btn mp-btn-with-icon text-xs px-3 py-1.5 rounded-lg shrink-0" title="Ana ekrana dön (Esc)">
+              <span class="mp-hub-back-icon-slot" aria-hidden="true"></span>
+              <span>Ana ekrana dön</span>
+            </button>
+            <h2 class="text-sm font-semibold mp-text-title m-0">Ölçüler</h2>
+            <span id="scans-inbox-count" class="scans-inbox-badge hidden">0</span>
+          </div>
+          <button id="btn-scans-add-wizard" type="button" class="mp-btn-secondary mp-btn-with-icon text-xs px-3 py-1.5 rounded-lg shrink-0" title="Ölçü ekleme sihirbazı">
+            <i data-lucide="plus" class="mp-icon mp-icon-sm"></i>
+            <span>Ölçü ekle</span>
+          </button>
+        </div>
+        <div class="scans-inbox-body flex flex-1 min-h-0 flex-col px-4 py-3 max-w-3xl w-full mx-auto">
+          <p class="text-[11px] mp-text-faint mb-2 shrink-0 leading-relaxed">
+            Üst + alt + kapanış aynı sipariş / isimle gruplanır. Bağlamadan önce özet onayı istenir.
+          </p>
+          <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
+            <div id="scans-inbox-filters" class="flex gap-1"></div>
+            <span id="scans-inbox-meta" class="text-[10px] mp-text-faint"></span>
+          </div>
+          <div id="scans-inbox-groups" class="flex-1 min-h-0 overflow-y-auto rounded-lg patient-list-scroll space-y-2"></div>
         </div>
       </div>
 
@@ -65,7 +103,10 @@
       <div id="messages-hub-view" class="hidden flex flex-1 min-h-0 flex-col">
         <div class="messages-hub-toolbar shrink-0 flex items-center justify-between px-4 py-2 mp-border-b">
           <div class="flex items-center gap-3">
-            <button id="btn-messages-hub-back" type="button" class="mp-btn-ghost text-xs px-2 py-1 rounded">← Ana ekran</button>
+            <button id="btn-messages-hub-back" type="button" class="mp-hub-back-btn mp-btn-with-icon text-xs px-3 py-1.5 rounded-lg shrink-0" title="Ana ekrana dön (Esc)">
+              <span class="mp-hub-back-icon-slot" aria-hidden="true"></span>
+              <span>Ana ekrana dön</span>
+            </button>
             <h2 class="text-sm font-semibold mp-text-title m-0">Mesajlar</h2>
             <span id="messages-hub-unread-total" class="hidden messages-hub-badge">0</span>
           </div>
@@ -91,7 +132,10 @@
               <div id="messages-hub-list" class="messages-hub-messages-list flex-1 overflow-y-auto p-4"></div>
               <div class="shrink-0 p-3 mp-border-t flex gap-2">
                 <textarea id="messages-hub-input" class="mp-field-input text-xs flex-1 min-h-[2.5rem] max-h-24 resize-y" placeholder="Laboratuvara mesaj yazın…" rows="2"></textarea>
-                <button id="btn-messages-hub-send" type="button" class="mp-btn-primary text-xs shrink-0 self-end px-3 py-2 rounded-lg">Gönder</button>
+                <button id="btn-messages-hub-send" type="button" class="mp-btn-primary mp-btn-with-icon text-xs shrink-0 self-end px-3 py-2 rounded-lg">
+                  <i data-lucide="send" class="mp-icon mp-icon-sm"></i>
+                  <span>Gönder</span>
+                </button>
               </div>
             </div>
           </main>
@@ -331,6 +375,35 @@
       </div>
     </div>
 
+    <!-- Ölçü seti bağlama onayı (güvenlik) -->
+    <div id="link-scan-confirm-modal" class="mp-overlay hidden fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div class="mp-modal w-full max-w-lg rounded-xl overflow-hidden">
+        <div class="px-5 py-4 mp-border-b">
+          <h2 class="text-base font-semibold mp-text-title">Bağlamadan önce kontrol</h2>
+          <p class="text-[11px] mp-text-muted mt-1">Yanlış set gitmesin — hasta ve dosyaları doğrulayın.</p>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+          <div class="scan-link-confirm-row">
+            <span class="scan-link-confirm-label">Hasta</span>
+            <strong id="link-scan-confirm-patient" class="scan-link-confirm-value"></strong>
+          </div>
+          <div id="link-scan-confirm-warning" class="hidden scan-wiz-alert scan-wiz-alert-error text-xs"></div>
+          <div>
+            <div class="text-[10px] font-semibold mp-text-muted uppercase tracking-wide mb-1.5">Gönderilecek dosyalar</div>
+            <ul id="link-scan-confirm-files" class="scan-link-confirm-files"></ul>
+          </div>
+          <label class="scan-link-confirm-check">
+            <input type="checkbox" id="link-scan-confirm-ack" />
+            <span>Hasta ve dosyaların doğru olduğunu kontrol ettim</span>
+          </label>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 mp-border-t">
+          <button id="btn-link-scan-cancel" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg">İptal</button>
+          <button id="btn-link-scan-confirm" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg" disabled>Evet, bu seti bağla</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Eşleştirmeyi düzelt -->
     <div id="reassign-scan-modal" class="mp-overlay hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="mp-modal w-full max-w-md rounded-xl overflow-hidden">
@@ -347,6 +420,76 @@
         <div class="flex justify-end gap-2 px-5 py-3 mp-border-t">
           <button id="btn-reassign-cancel" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg">İptal</button>
           <button id="btn-reassign-confirm" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg">Onayla</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hasta bilgileri düzenleme -->
+    <div id="patient-edit-modal" class="mp-overlay hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="mp-modal w-full max-w-md rounded-xl overflow-hidden">
+        <div class="px-5 py-4 mp-border-b">
+          <h2 class="text-base font-semibold mp-text-title">Hasta bilgileri</h2>
+          <p class="text-[11px] mp-text-muted mt-1">Ad, soyad ve notlar. Vaka ve ölçü işlemleri ana ekranda yapılır.</p>
+        </div>
+        <form id="patient-edit-form" class="px-5 py-4 space-y-3">
+          <div class="mp-field">
+            <label class="mp-field-label" for="patient-edit-surname">Soyad</label>
+            <input id="patient-edit-surname" type="text" class="mp-field-input" autocomplete="family-name" />
+          </div>
+          <div class="mp-field">
+            <label class="mp-field-label" for="patient-edit-first-name">Ad</label>
+            <input id="patient-edit-first-name" type="text" class="mp-field-input" autocomplete="given-name" />
+          </div>
+          <div class="mp-field">
+            <label class="mp-field-label" for="patient-edit-notes">Not</label>
+            <textarea id="patient-edit-notes" rows="2" class="mp-field-input resize-none" placeholder="İsteğe bağlı"></textarea>
+          </div>
+        </form>
+        <div class="flex justify-end gap-2 px-5 py-3 mp-border-t">
+          <button id="btn-patient-edit-cancel" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg">İptal</button>
+          <button id="btn-patient-edit-save" type="button" class="mp-btn-primary text-xs px-3 py-1.5 rounded-lg">Kaydet</button>
+        </div>
+        <div class="patient-edit-danger px-5 py-4 mp-border-t">
+          <p class="text-[11px] mp-text-muted leading-relaxed mb-2">
+            Hasta kaydı silinirse bağlı ölçü eşleşmeleri de kaldırılır. Bu işlem geri alınamaz.
+          </p>
+          <button id="btn-patient-edit-delete" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg text-red-400 border border-red-400/30 hover:bg-red-400/10">
+            Hastayı sil
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Uygulama ipuçları -->
+    <div id="app-tips-modal" class="mp-overlay hidden fixed inset-0 z-[65] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="app-tips-title">
+      <div class="mp-modal app-tips-panel w-full max-w-md rounded-xl overflow-hidden">
+        <div class="app-tips-header px-5 py-4 mp-border-b flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h2 id="app-tips-title" class="text-base font-semibold mp-text-title m-0">Hızlı başlangıç</h2>
+            <p class="text-[11px] mp-text-muted mt-1 mb-0">MeshPack günlük akışı için kısa ipuçları</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span id="app-tips-counter" class="text-[10px] mp-text-faint tabular-nums"></span>
+            <button id="btn-app-tips-close" type="button" class="app-tips-close mp-btn-ghost mp-icon-btn text-sm px-2 py-1 rounded" title="Kapat (Esc)" aria-label="Kapat">✕</button>
+          </div>
+        </div>
+        <div class="app-tips-progress-track" aria-hidden="true">
+          <div id="app-tips-progress-fill" class="app-tips-progress-fill"></div>
+        </div>
+        <div class="px-5 pt-4 pb-2">
+          <h3 id="app-tips-step-title" class="app-tips-step-title text-sm font-semibold mp-text-title mb-2"></h3>
+          <div id="app-tips-body" class="app-tips-body text-sm mp-text-secondary leading-relaxed min-h-[4.5rem]"></div>
+        </div>
+        <div class="px-5 pb-3">
+          <label class="settings-check text-xs mp-text-muted">
+            <input id="app-tips-dont-show" type="checkbox" />
+            <span>Bir daha gösterme</span>
+          </label>
+          <p class="text-[10px] mp-text-faint mt-1 mb-0 pl-6">Ayarlar → Genel bölümünden tekrar açabilirsiniz.</p>
+        </div>
+        <div class="flex items-center justify-between gap-2 px-5 py-3 mp-border-t">
+          <button id="btn-app-tips-prev" type="button" class="mp-btn-ghost text-xs px-3 py-1.5 rounded-lg" disabled>← Önceki</button>
+          <button id="btn-app-tips-next" type="button" class="mp-btn-primary text-xs px-4 py-1.5 rounded-lg min-w-[6.5rem]">Sonraki →</button>
         </div>
       </div>
     </div>
@@ -704,6 +847,14 @@
                 <input id="setting-start-fullscreen" type="checkbox" />
                 <span data-i18n="start_fullscreen">Başlangıçta tam ekran</span>
               </label>
+              <label class="settings-check">
+                <input id="setting-show-startup-tips" type="checkbox" />
+                <span>Açılışta ipuçları göster</span>
+              </label>
+              <button id="btn-settings-show-tips" type="button" class="mp-btn-secondary text-xs px-3 py-1.5 rounded-lg">
+                İpuçlarını görüntüle
+              </button>
+              <p class="text-[10px] mp-text-faint -mt-1">Kapattıysanız buradan tekrar açabilir veya ipuçlarını şimdi görüntüleyebilirsiniz.</p>
               <div>
                 <label class="settings-label" for="setting-session-timeout" data-i18n="session_timeout">Oturum zaman aşımı (dk)</label>
                 <input id="setting-session-timeout" type="number" min="1" max="120" class="settings-input" />
@@ -804,6 +955,34 @@
         </div>
         <p id="app-lock-error" class="app-lock-error hidden"></p>
         <button type="button" id="app-lock-submit" class="mp-btn-primary app-lock-submit w-full">Giriş yap</button>
+      </div>
+    </div>
+
+    <!-- Ölçü ekleme sihirbazı -->
+    <div id="scan-import-wizard" class="scan-import-wizard hidden" role="dialog" aria-modal="true" aria-labelledby="scan-wiz-title">
+      <div class="scan-wiz-panel scan-wiz-panel-wide">
+        <header class="scan-wiz-header">
+          <div>
+            <h2 id="scan-wiz-title" class="scan-wiz-title">Ölçü ekleme sihirbazı</h2>
+            <p id="scan-wiz-subtitle" class="scan-wiz-subtitle">Adım adım ekleyin — sağda önizleme birikir.</p>
+          </div>
+          <button type="button" id="btn-close-scan-wizard" class="mp-btn-ghost text-sm px-2 py-1 rounded" aria-label="Kapat">✕</button>
+        </header>
+        <div id="scan-wiz-steps" class="scan-wiz-steps"></div>
+        <div class="scan-wiz-main">
+          <div id="scan-wiz-body" class="scan-wiz-body"></div>
+          <aside id="scan-wiz-preview" class="scan-wiz-preview" aria-label="Ölçü önizlemesi">
+            <div class="scan-wiz-preview-stage">
+              <canvas id="scan-wiz-preview-canvas"></canvas>
+              <div id="scan-wiz-preview-empty" class="scan-wiz-preview-empty">
+                <span class="scan-wiz-preview-empty-icon">◇</span>
+                <span>Dosya ekledikçe burada görünecek</span>
+              </div>
+            </div>
+            <div id="scan-wiz-preview-legend" class="scan-wiz-preview-legend"></div>
+          </aside>
+        </div>
+        <div id="scan-wiz-footer" class="scan-wiz-footer"></div>
       </div>
     </div>
 

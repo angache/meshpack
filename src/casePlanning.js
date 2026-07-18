@@ -19,7 +19,7 @@ export function displayCaseStatus(caseRow) {
   const base = caseStatusMeta(caseRow?.status);
   if (caseRow?.status === "sent") return base;
   if (hasPlanningContent(caseRow) && (caseRow.status === "planning" || caseRow.status === "linked")) {
-    return { label: "Planlandı", cls: "case-status-planned" };
+    return { label: "Plan hazır", cls: "case-status-planned" };
   }
   return base;
 }
@@ -28,14 +28,14 @@ export function displayCaseStatus(caseRow) {
 export function planningActionLabel(caseRow) {
   if (!caseRow) return "Planla";
   if (caseRow.status === "sent") return "Görüntüle";
+  if (caseRow.status === "ready_to_send") return "Gönder";
   if (
-    caseRow.status === "ready_to_send" ||
     caseRow.status === "planning" ||
     hasPlanningContent(caseRow)
   ) {
-    return "Düzenle";
+    return "Planlamaya git";
   }
-  return "Planla";
+  return "Planlamaya git";
 }
 
 export function isPlanningReadOnly(caseRow) {

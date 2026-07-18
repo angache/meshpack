@@ -28,6 +28,7 @@ import { getDefaultVisibility, getDentalTreatments, getSettings, hexToNumber, on
 import { LAB_NOTE_TEMPLATES, appendLabNoteTemplate } from "./config/labNoteTemplates.js";
 import { renderCaseStatusSteps } from "./caseStatusSteps.js";
 import { evaluateCaseReadiness, formatReadinessAlert } from "./caseReadiness.js";
+import { initIcons, iconHtml } from "./icons.js";
 import { canSendViaMeshPackLab } from "./cloud/cloudUI.js";
 import { uploadCaseToCloud } from "./cloud/cases.js";
 import {
@@ -286,7 +287,7 @@ function renderReadinessChecklist() {
     .map(
       (c) =>
         `<li class="planning-readiness-item ${c.ok ? "is-ok" : "is-pending"}">
-          <span class="planning-readiness-icon">${c.ok ? "✓" : "○"}</span>
+          <span class="planning-readiness-icon">${c.ok ? iconHtml("check", { size: 14, className: "mp-icon mp-icon-sm" }) : iconHtml("circle", { size: 14, className: "mp-icon mp-icon-sm" })}</span>
           <span>${c.label}</span>
         </li>`
     )
@@ -362,11 +363,17 @@ function renderSendSummary() {
   if (cloudBtn) {
     cloudBtn.classList.toggle("hidden", !meshPackLabSendEnabled);
     cloudBtn.disabled = !hasFiles || context.caseRow.status === "sent";
-    cloudBtn.textContent = context.caseRow.status === "sent" ? "✓ Lab'a gönderildi" : "MeshPack Lab'a gönder";
+    cloudBtn.innerHTML =
+      context.caseRow.status === "sent"
+        ? `<span class="inline-flex items-center gap-1">${iconHtml("check", { size: 14, className: "mp-icon mp-icon-sm" })}<span>Lab'a gönderildi</span></span>`
+        : "MeshPack Lab'a gönder";
   }
   if (uploadBtn) {
     uploadBtn.disabled = !hasFiles || context.caseRow.status === "sent";
-    uploadBtn.textContent = context.caseRow.status === "sent" ? "✓ Gönderildi" : "Drive'a yükle";
+    uploadBtn.innerHTML =
+      context.caseRow.status === "sent"
+        ? `<span class="inline-flex items-center gap-1">${iconHtml("check", { size: 14, className: "mp-icon mp-icon-sm" })}<span>Gönderildi</span></span>`
+        : "Drive'a yükle";
   }
 
   renderReadinessChecklist();
@@ -726,7 +733,7 @@ function setSaveFeedback(message) {
     toast.classList.add("hidden");
     return;
   }
-  toast.textContent = message;
+  toast.innerHTML = `<span class="inline-flex items-center gap-1">${iconHtml("check", { size: 14, className: "mp-icon mp-icon-sm" })}<span>${message}</span></span>`;
   toast.classList.remove("hidden");
   window.clearTimeout(setSaveFeedback._timer);
   setSaveFeedback._timer = window.setTimeout(() => setSaveFeedback(""), 2500);
@@ -789,8 +796,10 @@ function renderHeader(caseRow, patient) {
     readyBtn.classList.toggle("hidden", readOnly);
     readyBtn.disabled = readOnly;
     if (!readOnly) {
-      readyBtn.textContent =
-        caseRow.status === "ready_to_send" ? "✓ Gönderime hazır" : "Gönderime hazır";
+      readyBtn.innerHTML =
+        caseRow.status === "ready_to_send"
+          ? `<span class="inline-flex items-center gap-1">${iconHtml("check", { size: 14, className: "mp-icon mp-icon-sm" })}<span>Gönderime hazır</span></span>`
+          : "Gönderime hazır";
     }
   }
 
@@ -938,7 +947,6 @@ export async function openPlanning(patient, scanSession) {
   renderSendSummary();
   await openPlanningCaseMessages(caseRow);
 
-  el("new-scan-banner")?.classList.add("hidden");
   el("main-layout")?.classList.add("hidden");
   el("planning-view")?.classList.remove("hidden");
 }
@@ -1008,7 +1016,7 @@ async function savePlanning() {
     dirty = false;
     renderHeader(updated, context.patient);
     renderSendSummary();
-    setSaveFeedback("✓ Plan kaydedildi");
+    setSaveFeedback("Plan kaydedildi");
     await onDataChange?.();
     return updated;
   } catch (err) {

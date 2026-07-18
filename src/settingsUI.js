@@ -10,6 +10,7 @@ import {
   mountDentalTreatmentsEditor,
   validateTreatments,
 } from "./settingsDentalTreatmentsUI.js";
+import { shouldShowStartupTips, setShowStartupTipsPreference } from "./appTips.js";
 
 let draft = null;
 let activeTab = "appearance";
@@ -72,6 +73,7 @@ function fillForm() {
   setVal("setting-lower-offset", draft.lower_jaw_offset_mm);
   setVal("setting-language", draft.language);
   setCheck("setting-start-fullscreen", draft.start_fullscreen);
+  setCheck("setting-show-startup-tips", shouldShowStartupTips());
   setVal("setting-session-timeout", draft.session_timeout_min);
   setVal("setting-planning-preview-height", draft.planning_preview_height);
 
@@ -202,6 +204,7 @@ export function initSettingsUI({ onSave, onDriveAuth, onIcpAlign, onTabSwitch: t
       return;
     }
     setSettings(next);
+    setShowStartupTipsPreference(getCheck("setting-show-startup-tips"));
     applySettings(next);
     await onSave?.(settingsToPayload(next));
     closeSettingsModal();

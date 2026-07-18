@@ -35,7 +35,7 @@ export function summarizePatientCases(sessions) {
   const readyToSend = sessions.some((s) => s.status === "ready_to_send");
 
   let actionHint = null;
-  if (readyToSend) actionHint = "Gönderime hazır";
+  if (readyToSend) actionHint = "Göndermeye hazır";
   else if (needsPlan) actionHint = "Plan bekliyor";
 
   return {

@@ -1,4 +1,5 @@
 import { listSentCases } from "./cases.js";
+import { iconHtml } from "./icons.js";
 
 let openCaseHandler = null;
 
@@ -38,9 +39,9 @@ function renderEntries(entries) {
         <time class="send-history-time">${formatSentAt(entry.sent_at)}</time>
       </div>
       <p class="send-history-patient">${patientLabel(entry)}</p>
-      <button type="button" class="send-history-open text-[10px] text-medical-accent hover:underline"
+      <button type="button" class="send-history-open mp-btn-with-icon text-[10px] text-medical-accent hover:underline"
         data-case-id="${entry.id}" data-patient-id="${entry.patient_id}">
-        Görüntüle →
+        <span>Görüntüle</span>${iconHtml("arrow-right", { size: 12, className: "mp-icon mp-icon-xs" })}
       </button>
     </article>`
     )

@@ -6,6 +6,9 @@ export const AUDIT_ACTION_LABELS = {
   detach: "Ölçü kaldırıldı",
   case_create: "Vaka oluşturuldu",
   reject_suggestion: "Öneri reddedildi",
+  dismiss_group: "Grup listeden kaldırıldı",
+  restore_group: "Gizlenen grup geri alındı",
+  case_delete: "Vaka kaldırıldı",
 };
 
 export async function listAuditLog(limit = 100, patientId = null) {

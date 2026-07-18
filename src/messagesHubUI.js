@@ -10,6 +10,8 @@ import { CLOUD_CASE_STATUS_LABELS, listMessageThreads, THREAD_PAGE_SIZE } from "
 import { isCloudConfigured } from "./cloud/supabaseClient.js";
 import { getCase } from "./cases.js";
 
+import { mountHubBackIcons, syncHeaderNavButtons } from "./navChrome.js";
+
 const $ = (id) => document.getElementById(id);
 
 let hubOpen = false;
@@ -159,6 +161,7 @@ function setHubVisible(visible) {
     if (planning && !planning.classList.contains("hidden")) {
       planning.dataset.wasOpen = "1";
     }
+    $("scans-inbox-view")?.classList.add("hidden");
     $("main-layout")?.classList.add("hidden");
     $("planning-view")?.classList.add("hidden");
     return;
@@ -173,6 +176,7 @@ function setHubVisible(visible) {
   } else {
     $("main-layout")?.classList.remove("hidden");
   }
+  syncHeaderNavButtons();
 }
 
 function scrollChatToEnd() {
@@ -532,6 +536,7 @@ export function openMessagesHub(caseId = null) {
   }
 
   setHubVisible(true);
+  mountHubBackIcons();
   // Önceki açılıştan kalan liste varsa anında göster, arkada tazele
   if (threads.length) renderThreadList();
   loadThreads(caseId).catch((err) => console.warn("[messagesHub] load:", err));
@@ -542,6 +547,10 @@ export function closeMessagesHub() {
   activeThreadId = null;
   activeThread = null;
   setHubVisible(false);
+}
+
+export function isMessagesHubOpen() {
+  return hubOpen;
 }
 
 export async function refreshMessagesHubChrome() {
@@ -578,7 +587,6 @@ export function initMessagesHub({ getFileBrowser: getFb, openPlanning } = {}) {
   openPlanningCallback = openPlanning;
   onOpenCaseCallback = findAndOpenPlanning;
 
-  $("btn-header-messages")?.addEventListener("click", () => openMessagesHub());
   $("btn-messages-hub-back")?.addEventListener("click", () => closeMessagesHub());
   $("btn-messages-hub-send")?.addEventListener("click", () => sendHubMessage());
   $("btn-messages-open-case")?.addEventListener("click", () => openCaseFromHub());

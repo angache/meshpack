@@ -5,6 +5,7 @@ import {
   defaultActiveTreatmentId,
   resolveTreatment,
 } from "./config/dentalTreatments.js";
+import { iconHtml } from "./icons.js";
 
 export const FDI_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
 export const FDI_UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
@@ -115,7 +116,7 @@ function renderSummary(plan, catalog) {
           <span class="fdi-chip ${meta.cls}${meta.unknown ? " fdi-chip-unknown" : ""}">
             <span class="fdi-chip-num">${num}</span>
             <span class="fdi-chip-label">${meta.label}</span>
-            <button type="button" class="fdi-chip-remove" data-remove-tooth="${num}" title="Kaldır">×</button>
+            <button type="button" class="fdi-chip-remove mp-btn-with-icon" data-remove-tooth="${num}" title="Kaldır">${iconHtml("x", { size: 12, className: "mp-icon mp-icon-xs" })}</button>
           </span>`;
         })
         .join("")}

@@ -12,7 +12,7 @@ mod watcher;
 
 use config::{AppConfig, PublicConfig};
 use activity_log::ActivityLogEntry;
-use db::{AuditEntry, Case, Patient, ScanLink, SentCaseRow, StemAlias, StemRejection};
+use db::{AuditEntry, Case, DismissedScanGroup, Patient, ScanLink, SentCaseRow, StemAlias, StemRejection};
 use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
@@ -113,6 +113,21 @@ fn list_folder_scans(folder: String, state: State<'_, AppState>) -> Result<Vec<f
         .file_extensions
         .clone();
     files::list_scan_files(&folder, &extensions)
+}
+
+#[tauri::command]
+fn import_scan_files(paths: Vec<String>, state: State<'_, AppState>) -> Result<Vec<files::ScanFileEntry>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let watch_folder = config
+        .watch_folder
+        .as_ref()
+        .filter(|f| !f.is_empty())
+        .ok_or("Önce ayarlardan izleme klasörü seçin")?
+        .clone();
+    let extensions = config.file_extensions.clone();
+    drop(config);
+
+    files::import_scan_files(&paths, &watch_folder, &extensions)
 }
 
 #[tauri::command]
@@ -391,6 +406,12 @@ fn update_case_status(
 }
 
 #[tauri::command]
+fn delete_case(case_id: String, reason: String, state: State<'_, AppState>) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::delete_case(&conn, &case_id, &reason)
+}
+
+#[tauri::command]
 fn list_patients(state: State<'_, AppState>) -> Result<Vec<Patient>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     db::list_patients(&conn)
@@ -473,6 +494,40 @@ fn reject_stem_suggestion(
 ) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     db::reject_stem_suggestion(&conn, &file_stem, &patient_id)
+}
+
+#[tauri::command]
+fn list_dismissed_scan_groups(state: State<'_, AppState>) -> Result<Vec<DismissedScanGroup>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::list_dismissed_scan_groups(&conn)
+}
+
+#[tauri::command]
+fn dismiss_scan_group(
+    group_key: String,
+    stem_key: String,
+    session_day: String,
+    file_stem: String,
+    file_paths: Vec<String>,
+    reason: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::dismiss_scan_group(
+        &conn,
+        &group_key,
+        &stem_key,
+        &session_day,
+        &file_stem,
+        &file_paths,
+        &reason,
+    )
+}
+
+#[tauri::command]
+fn restore_dismissed_scan_group(group_key: String, state: State<'_, AppState>) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::restore_dismissed_scan_group(&conn, &group_key)
 }
 
 #[tauri::command]
@@ -674,6 +729,7 @@ pub fn run() {
             get_config,
             save_settings,
             list_folder_scans,
+            import_scan_files,
             start_watching,
             drive_authenticate,
             compress_and_upload,
@@ -691,6 +747,9 @@ pub fn run() {
             list_sent_cases,
             list_stem_rejections,
             reject_stem_suggestion,
+            list_dismissed_scan_groups,
+            dismiss_scan_group,
+            restore_dismissed_scan_group,
             backup_database,
             export_database,
             secure_storage_get,
@@ -718,6 +777,7 @@ pub fn run() {
             update_case_planning,
             begin_case_planning,
             update_case_status,
+            delete_case,
         ])
         .run(tauri::generate_context!())
         .expect("MeshPack başlatılırken hata oluştu");

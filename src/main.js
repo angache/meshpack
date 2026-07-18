@@ -33,6 +33,12 @@ import { initLocalUsersUI, refreshLocalUsersAdminUI } from "./localUsersUI.js";
 import { initCaseModals } from "./caseModals.js";
 import { initPlanningPage, openPlanning } from "./planningPage.js";
 import { initMessagesHub, refreshMessagesHubChrome } from "./messagesHubUI.js";
+import { initScansInbox, openScansInbox, onAfterFileBrowserRender } from "./scansInboxUI.js";
+import { initScanImportWizard } from "./scanImportWizard.js";
+import { initIcons, iconInline, iconHtml } from "./icons.js";
+import { initPatientEditModal } from "./patientEditModal.js";
+import { initAppTipsUI, maybeShowStartupTipsModal, setAppTipsContext } from "./appTipsUI.js";
+import { initAppNavigation } from "./appNavigation.js";
 import { t } from "./i18n.js";
 
 const statusBadge = document.getElementById("status-badge");
@@ -42,8 +48,6 @@ const viewerPlaceholder = document.getElementById("viewer-placeholder");
 const btnAlign = document.getElementById("btn-align");
 const settingsModal = document.getElementById("settings-modal");
 
-const newScanBanner = document.getElementById("new-scan-banner");
-const newScanBannerText = document.getElementById("new-scan-banner-text");
 const planningPromptBanner = document.getElementById("planning-prompt-banner");
 const planningPromptText = document.getElementById("planning-prompt-text");
 
@@ -120,6 +124,7 @@ function initFileBrowser() {
     getSessionPatientKey: () => session.patientKey,
     isScanVisible: (type) => visibility[type],
     getNewFilePaths: () => newFilePaths,
+    onAfterRender: () => onAfterFileBrowserRender(),
   });
 }
 
@@ -131,7 +136,6 @@ function syncPatientToForm(patient) {
 function markNewScan({ path, filename, suggestedName, scanType }) {
   newFilePaths.add(path);
   lastNewScan = { path, filename, suggestedName, scanType };
-  updateNewScanBanner();
   setStatus("active", "🟢 Yeni ölçü algılandı");
   fileBrowser?.render();
 }
@@ -140,7 +144,6 @@ function clearNewForPaths(paths) {
   for (const p of paths) newFilePaths.delete(p);
   if (lastNewScan && paths.includes(lastNewScan.path)) {
     lastNewScan = null;
-    updateNewScanBanner();
   }
   fileBrowser?.render();
 }
@@ -148,22 +151,6 @@ function clearNewForPaths(paths) {
 function clearAllNewScans() {
   newFilePaths.clear();
   lastNewScan = null;
-  updateNewScanBanner();
-}
-
-function updateNewScanBanner() {
-  if (!lastNewScan) {
-    newScanBanner.classList.add("hidden");
-    return;
-  }
-  const typeLabel = SCAN_LABELS[lastNewScan.scanType] || "Tarama";
-  let text = `Yeni ölçü: ${lastNewScan.suggestedName} — ${typeLabel} (eşleştirmeyi bekliyor)`;
-  const suggestion = fileBrowser?.getSuggestionForPath?.(lastNewScan.path);
-  if (suggestion) {
-    text += ` · Öneri: ${suggestion.label} (${suggestion.score}%)`;
-  }
-  newScanBannerText.textContent = text;
-  newScanBanner.classList.remove("hidden");
 }
 
 function showPlanningPrompt(patient, scanSession) {
@@ -187,11 +174,9 @@ function gotoPlanningPrompt() {
 }
 
 async function gotoNewScan() {
-  if (!lastNewScan || !fileBrowser) return;
-  await fileBrowser.refresh();
-  fileBrowser.highlightGroupForPath(lastNewScan.path);
-  fileBrowser.render();
-  fileBrowser.pendingGroupsEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!lastNewScan) return;
+  await fileBrowser?.refresh();
+  openScansInbox({ highlightPath: lastNewScan.path });
 }
 
 function expandPreview() {
@@ -215,7 +200,6 @@ function collapsePreview() {
 
 document.getElementById("btn-expand-preview").addEventListener("click", expandPreview);
 document.getElementById("btn-close-preview").addEventListener("click", collapsePreview);
-document.getElementById("btn-goto-new-scan").addEventListener("click", gotoNewScan);
 
 viewerContainer.addEventListener("dblclick", (e) => {
   e.preventDefault();
@@ -367,14 +351,17 @@ function updateOverlayScanToggles() {
 
     const base = `overlay-scan-btn px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${OVERLAY_BTN_ACTIVE[type]}`;
     el.className = visible ? base : `${base} opacity-40 line-through`;
-    el.textContent = visible ? `${SCAN_LABELS[type]} 👁` : `${SCAN_LABELS[type]} 🚫`;
+    el.innerHTML = visible
+      ? `${SCAN_LABELS[type]} ${iconHtml("eye", { size: 12, className: "mp-icon mp-icon-xs inline" })}`
+      : `${SCAN_LABELS[type]} ${iconHtml("eye-off", { size: 12, className: "mp-icon mp-icon-xs inline" })}`;
   }
 }
 
 function updateFileInfoBar() {
   const scans = session.getAllScans();
   if (scans.length === 0) {
-    fileInfoBar.textContent = "📁 Henüz dosya algılanmadı";
+    fileInfoBar.innerHTML = `<span class="inline-flex items-center gap-1.5">${iconInline("folder-open", "xs")}<span>Henüz dosya algılanmadı</span></span>`;
+    initIcons(fileInfoBar);
     return;
   }
 
@@ -384,7 +371,8 @@ function updateFileInfoBar() {
     return `${label}: ${formatFileSize(s.sizeBytes)}${vis}`;
   });
 
-  fileInfoBar.textContent = `📁 ${parts.join(" | ")} — Toplam: ${formatFileSize(session.getTotalSize())}`;
+  fileInfoBar.innerHTML = `<span class="inline-flex items-center gap-1.5">${iconInline("folder-open", "xs")}<span>${parts.join(" | ")} — Toplam: ${formatFileSize(session.getTotalSize())}</span></span>`;
+  initIcons(fileInfoBar);
 }
 
 /**
@@ -616,11 +604,15 @@ onSettingsChange(() => {
   applyViewerSettings();
   applySettings();
   refreshIdleTimeout();
+  setAppTipsContext({ watchFolder: getSettings().watch_folder || null });
 });
 
 async function init() {
+  initIcons(document);
   initViewer();
   initCaseModals();
+  initPatientEditModal();
+  initAppTipsUI();
   initPlanningPage({
     onClose: async () => {
       await fileBrowser?.refresh();
@@ -631,6 +623,17 @@ async function init() {
     },
   });
   initFileBrowser();
+  initScansInbox({
+    getFileBrowser: () => fileBrowser,
+  });
+  initAppNavigation();
+  initScanImportWizard({
+    getFileBrowser: () => fileBrowser,
+    getLastNewScanPath: () => lastNewScan?.path || null,
+    onComplete: () => {
+      fileBrowser?.render();
+    },
+  });
   initSendHistoryUI({
     onOpenCase: async (entry) => {
       closeSettingsModal();
@@ -658,6 +661,8 @@ async function init() {
     } else {
       fileBrowser.setWatchFolder(null);
     }
+    setAppTipsContext({ watchFolder: merged.watch_folder || null });
+    maybeShowStartupTipsModal();
     if (merged.start_fullscreen) {
       await appWindow.setFullscreen(true);
     }

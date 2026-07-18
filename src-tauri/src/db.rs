@@ -67,6 +67,17 @@ pub struct StemRejection {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DismissedScanGroup {
+    pub group_key: String,
+    pub stem_key: String,
+    pub session_day: String,
+    pub file_stem: String,
+    pub file_paths: Vec<String>,
+    pub reason: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SentCaseRow {
     pub id: String,
     pub patient_id: String,
@@ -198,6 +209,26 @@ fn migrate(conn: &Connection) -> Result<(), String> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stem_rejections_patient ON patient_stem_rejections(patient_id)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS dismissed_scan_groups (
+            group_key TEXT PRIMARY KEY,
+            stem_key TEXT NOT NULL,
+            session_day TEXT NOT NULL,
+            file_stem TEXT NOT NULL,
+            file_paths TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dismissed_scan_groups_day ON dismissed_scan_groups(session_day)",
         [],
     )
     .map_err(|e| e.to_string())?;
@@ -443,6 +474,131 @@ pub fn reject_stem_suggestion(
         None,
         None,
         None,
+    )?;
+
+    Ok(())
+}
+
+fn row_to_dismissed_scan_group(row: &rusqlite::Row<'_>) -> rusqlite::Result<DismissedScanGroup> {
+    let paths_json: String = row.get(4)?;
+    let file_paths: Vec<String> = serde_json::from_str(&paths_json).unwrap_or_default();
+    Ok(DismissedScanGroup {
+        group_key: row.get(0)?,
+        stem_key: row.get(1)?,
+        session_day: row.get(2)?,
+        file_stem: row.get(3)?,
+        file_paths,
+        reason: row.get(5)?,
+        created_at: row.get(6)?,
+    })
+}
+
+pub fn list_dismissed_scan_groups(conn: &Connection) -> Result<Vec<DismissedScanGroup>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT group_key, stem_key, session_day, file_stem, file_paths, reason, created_at
+             FROM dismissed_scan_groups ORDER BY created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], row_to_dismissed_scan_group)
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Bekleyen ölçü grubunu listeden gizle (dosyalar izleme klasöründe kalır).
+pub fn dismiss_scan_group(
+    conn: &Connection,
+    group_key: &str,
+    stem_key: &str,
+    session_day: &str,
+    file_stem: &str,
+    file_paths: &[String],
+    reason: &str,
+) -> Result<(), String> {
+    let reason = reason.trim();
+    if reason.len() < 3 {
+        return Err("Gerekçe en az 3 karakter olmalı".to_string());
+    }
+    if group_key.trim().is_empty() || file_paths.is_empty() {
+        return Err("Geçersiz grup".to_string());
+    }
+
+    for path in file_paths {
+        if get_scan_link(conn, path)?.is_some() {
+            return Err("Bağlı dosya içeren grup listeden kaldırılamaz".to_string());
+        }
+    }
+
+    let paths_json =
+        serde_json::to_string(file_paths).map_err(|e| format!("Dosya listesi: {e}"))?;
+    let ts = now_ts();
+
+    conn.execute(
+        "INSERT INTO dismissed_scan_groups
+         (group_key, stem_key, session_day, file_stem, file_paths, reason, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(group_key) DO UPDATE SET
+           stem_key = excluded.stem_key,
+           session_day = excluded.session_day,
+           file_stem = excluded.file_stem,
+           file_paths = excluded.file_paths,
+           reason = excluded.reason,
+           created_at = excluded.created_at",
+        params![
+            group_key,
+            stem_key,
+            session_day,
+            file_stem,
+            paths_json,
+            reason,
+            ts
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let audit_path = file_paths.first().map(|s| s.as_str());
+    write_audit(
+        conn,
+        "dismiss_group",
+        audit_path,
+        None,
+        None,
+        None,
+        None,
+        Some(reason),
+    )?;
+
+    Ok(())
+}
+
+pub fn restore_dismissed_scan_group(conn: &Connection, group_key: &str) -> Result<(), String> {
+    if group_key.trim().is_empty() {
+        return Err("Geçersiz grup".to_string());
+    }
+
+    let changed = conn
+        .execute(
+            "DELETE FROM dismissed_scan_groups WHERE group_key = ?1",
+            params![group_key],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if changed == 0 {
+        return Err("Gizlenen grup bulunamadı".to_string());
+    }
+
+    write_audit(
+        conn,
+        "restore_group",
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(group_key),
     )?;
 
     Ok(())
@@ -972,6 +1128,71 @@ pub fn begin_case_planning(conn: &Connection, case_id: &str) -> Result<Case, Str
         .ok();
     }
     Ok(case_row)
+}
+
+/// Vakayı kaldır; bağlı ölçüler bekleyen listeye döner. Gönderilmiş vakalar silinemez.
+pub fn delete_case(conn: &Connection, case_id: &str, reason: &str) -> Result<(), String> {
+    let reason = reason.trim();
+    if reason.len() < 3 {
+        return Err("Gerekçe en az 3 karakter olmalı".to_string());
+    }
+
+    let case_row = get_case(conn, case_id)?.ok_or_else(|| "Vaka bulunamadı".to_string())?;
+
+    if case_row.status == CASE_STATUS_SENT {
+        return Err("Gönderilmiş vaka kaldırılamaz".to_string());
+    }
+
+    let links = list_case_scans(conn, case_id)?;
+
+    for link in &links {
+        write_audit(
+            conn,
+            "detach",
+            Some(&link.file_path),
+            Some(&case_row.patient_id),
+            None,
+            Some(case_id),
+            None,
+            Some(reason),
+        )?;
+    }
+
+    conn.execute("DELETE FROM scan_links WHERE case_id = ?1", params![case_id])
+        .map_err(|e| e.to_string())?;
+
+    let audit_note = format!("{} — {reason}", case_row.case_number);
+    write_audit(
+        conn,
+        "case_delete",
+        None,
+        Some(&case_row.patient_id),
+        None,
+        Some(case_id),
+        None,
+        Some(&audit_note),
+    )?;
+
+    crate::activity_log::write(
+        conn,
+        "case",
+        "delete",
+        &format!("Vaka kaldırıldı: {}", case_row.case_number),
+        Some(reason),
+        Some(&case_row.patient_id),
+        Some(case_id),
+    )?;
+
+    conn.execute("DELETE FROM cases WHERE id = ?1", params![case_id])
+        .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE patients SET updated_at = ?2 WHERE id = ?1",
+        params![case_row.patient_id, now_ts()],
+    )
+    .ok();
+
+    Ok(())
 }
 
 pub fn update_case_lab_notes(
