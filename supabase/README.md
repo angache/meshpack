@@ -18,6 +18,7 @@ CLI yoksa: Dashboard → **SQL Editor** → sırayla çalıştırın:
 2. `migrations/20260706110000_meshpack_onboarding.sql` (kayıt RPC)
 3. `migrations/20260706120000_meshpack_lab_linking.sql` (lab listesi + istek/onay)
 4. `migrations/20260706130000_fix_handle_new_user.sql` (kayıt HTTP 500 düzeltmesi — gerekirse)
+5. `migrations/20260720100000_e2ee_schema.sql` (E2EE vaka transferi — `user_keys`, `cases`, `encrypted-cases`)
 
 Veya tek seferde: `setup_mpack.sql`
 
