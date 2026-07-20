@@ -10,13 +10,3 @@ src-tauri/target/
 
 # Yerel tarayıcı örnekleri / hasta verileri
 farklı marka taramalar/
-
-# Flutter mobile (apps/mobile)
-apps/mobile/.dart_tool/
-apps/mobile/.packages
-apps/mobile/build/
-apps/mobile/.env
-
-# Shared packages
-packages/*/node_modules/
-packages/*/dist/
